@@ -10,7 +10,7 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
-RESOLUTION = (1920, 1080)
+RESOLUTION = [1920, 1080]
 
 @dataclass(init=False)
 class Cell:
@@ -80,6 +80,7 @@ class Visualizer:
         self.y0 = y0
         self.y1 = y1
 
+        RESOLUTION[0] = int(RESOLUTION[1] * (x1 - x0) / (y1 - y0))
         self.vertices = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
         self.vertices_color = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
         self.vertex_num = 0
@@ -90,7 +91,7 @@ class Visualizer:
         # GLUT setup and main loop
         glutInit()
         glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)  # Double buffer and RGB color mode
-        glutInitWindowSize(*RESOLUTION)  # Set window size
+        glutInitWindowSize(RESOLUTION[0], RESOLUTION[1])  # Set window size
         glutCreateWindow("Visualizer")  # Create window
         glutDisplayFunc(self.display)  # Register the display function
         glutReshapeFunc(self.reshape)  # Register the reshape function to handle window resizing
@@ -316,7 +317,7 @@ class Board:
 # https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
 def capture_frame():
     glPixelStorei(GL_PACK_ALIGNMENT, 1)
-    pixels = glReadPixels(0, 0, *RESOLUTION, GL_RGB, GL_UNSIGNED_BYTE)
+    pixels = glReadPixels(0, 0, RESOLUTION[0], RESOLUTION[1], GL_RGB, GL_UNSIGNED_BYTE)
     frame = np.frombuffer(pixels, dtype=np.uint8)
     frame = frame.reshape((RESOLUTION[1], RESOLUTION[0], 3))  # Reshape to the correct frame size
     frame = frame[::-1, :, :]
@@ -384,7 +385,7 @@ if __name__ == '__main__':
         delay = 0
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Choose the codec (mp4v for MP4)
         fps = 60
-        video_out = cv2.VideoWriter(output_file, fourcc, fps, RESOLUTION) 
+        video_out = cv2.VideoWriter(output_file, fourcc, fps, tuple(RESOLUTION)) 
         frame = capture_frame()
         video_out.write(frame)
         #glutHideWindow()
@@ -399,7 +400,6 @@ if __name__ == '__main__':
             if output_file is not None and video_out:
                 video_out.release()
             print(f"visualization finish, cost: {time.time() - start_time} secs")
-            exit(0)
             return
         
         glutPostRedisplay()  # Redraw the scene
