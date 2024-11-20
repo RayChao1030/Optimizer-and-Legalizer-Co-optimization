@@ -1,0 +1,4 @@
+Banking_Cell: FF_1_0 FF_1_1 --> FF_2_0 60 0 10 10
+Banking_Cell: FF_1_2 FF_1_5 --> FF_2_1 20 20 10 10
+Banking_Cell: FF_1_4 FF_1_6 --> FF_2_2 60 30 10 10
+Banking_Cell: FF_1_3 --> FF_2_3 40 10 10 20
