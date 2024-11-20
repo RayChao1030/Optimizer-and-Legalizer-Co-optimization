@@ -329,17 +329,16 @@ def capture_frame():
 if __name__ == '__main__':
     start_time = time.time()
     parser = argparse.ArgumentParser()
-    parser.add_argument('-lg',     type=str)
-    parser.add_argument('-opt',    type=str)
-    parser.add_argument('-postlg', type=str)
-    parser.add_argument('-o',      type=str)
-    parser.add_argument('-display',action='store_true')
+    parser.add_argument('-lg',     type=str, required=True, help="lg file")
+    parser.add_argument('-opt',    type=str, required=True, help="opt file")
+    parser.add_argument('-postlg', type=str, required=True, help="post file")
+    parser.add_argument('-o',      type=str, help="output mp4 file")
     args = parser.parse_args()   
     lg_file = args.lg 
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
-    print(lg_file, opt_file, post_file, output_file)
+    #print(lg_file, opt_file, post_file, output_file)
 
     board = Board()
     board.parser(lg_file)
