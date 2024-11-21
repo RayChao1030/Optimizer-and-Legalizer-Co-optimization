@@ -5,10 +5,10 @@ from sortedcontainers import SortedDict
 import cv2
 import time
 import multiprocessing
+import glfw
 
 import numpy as np
 from OpenGL.GL import *
-from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
 RESOLUTION = [1920, 1080]
@@ -59,24 +59,22 @@ class Canva:
 
     def initOpenGL(self, display):
         # GLUT setup and main loop
-        glutInit()
-        if display:
-            glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)  # Double buffer and RGB color mode
-            glutInitWindowSize(*RESOLUTION)  # Set window size
-            glutCreateWindow("Visualizer")  # Create window
-            glutDisplayFunc(self.display)  # Register the display function
-        else:
-            glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)  # Double buffer and RGB color mode
-            glutInitWindowSize(1, 1)  # Set window size
-            glutCreateWindow("Visualizer")  # Create window
-            glutHideWindow()
+        if not glfw.init():
+            raise RuntimeError("Failed to initialize GLFW")
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 1)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 2)
 
-            # steup view port 
-            glViewport(0, 0, *RESOLUTION)
-            glutDisplayFunc(lambda *args: None)  # Register the display function
+        if not display:
+            glfw.window_hint(glfw.VISIBLE, glfw.FALSE)     
+
+        self.window = glfw.create_window(*RESOLUTION, "Visualizer", None, None)
+        if not self.window:
+            glfw.terminate()
+            raise RuntimeError("Failed to create GLFW window")
         
-        
-        glutReshapeFunc(self.reshape)  # Register the reshape function to handle window resizing
+        glfw.make_context_current(self.window)
+
+        glViewport(0, 0, *RESOLUTION)
 
         # off screen rendering
         # https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
@@ -107,15 +105,6 @@ class Canva:
         self.vbo_colors = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_colors)
         glBufferData(GL_ARRAY_BUFFER, self.vertices_color.nbytes, self.vertices_color , GL_STATIC_DRAW)
-
-
-    # OpenGL reshape function
-    def reshape(self, width, height):
-        glViewport(0, 0, width, height)  # Set the viewport size
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(self.x0, self.x1, self.y0, self.y1, -1, 1)  # Adjust the scale as needed
-        glMatrixMode(GL_MODELVIEW)
 
     def pushCell(self, cell: Cell):
         i = self.vertex_num
@@ -194,7 +183,7 @@ class Canva:
     # OpenGL display setup
     def display(self):
         self.draw()
-        glutSwapBuffers()  # Swap buffers for double buffering
+        glfw.swap_buffers(self.window)
 
 @dataclass
 class OptimizeStep:
@@ -405,7 +394,8 @@ class Visualizer:
         self.video_process.join()
         print(f"visualization finish, cost: {time.time() - self.start_time} secs")
         if self.display:
-            glutLeaveMainLoop()
+            #glutLeaveMainLoop()
+            glfw.set_window_should_close(self.board.visualizer.window, True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -427,8 +417,9 @@ if __name__ == '__main__':
     visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display)
 
     if display:
-        glutIdleFunc(visualizer.step)
-        glutMainLoop()
+        while not glfw.window_should_close(visualizer.board.visualizer.window):
+            visualizer.step()         # Update state
+            glfw.poll_events()  # Process events
     else:
         while not visualizer.step():
             pass
