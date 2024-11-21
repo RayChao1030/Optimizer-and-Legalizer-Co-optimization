@@ -73,8 +73,8 @@ class Row:
         return overlap_cells 
 
 BUFFER_SIZE = 500000
-class Visualizer:
-    def __init__(self, x0, y0, x1, y1):
+class Canva:
+    def __init__(self, x0, y0, x1, y1, display = True):
         self.x0 = x0
         self.x1 = x1
         self.y0 = y0
@@ -85,16 +85,38 @@ class Visualizer:
         self.vertices_color = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
         self.vertex_num = 0
 
-        self.initOpenGL()
+        self.initOpenGL(display)
 
-    def initOpenGL(self):
+    def initOpenGL(self, display):
         # GLUT setup and main loop
         glutInit()
-        glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)  # Double buffer and RGB color mode
-        glutInitWindowSize(RESOLUTION[0], RESOLUTION[1])  # Set window size
-        glutCreateWindow("Visualizer")  # Create window
-        glutDisplayFunc(self.display)  # Register the display function
+        if display:
+            glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)  # Double buffer and RGB color mode
+            glutInitWindowSize(RESOLUTION[0], RESOLUTION[1])  # Set window size
+            glutCreateWindow("Visualizer")  # Create window
+            glutDisplayFunc(self.display)  # Register the display function
+        else:
+            glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)  # Double buffer and RGB color mode
+            glutInitWindowSize(1, 1)  # Set window size
+            glutCreateWindow("Visualizer")  # Create window
+            glutHideWindow()
+
+            # steup view port 
+            glViewport(0, 0, RESOLUTION[0], RESOLUTION[1])
+            glutDisplayFunc(self.draw)  # Register the display function
+        
+        
         glutReshapeFunc(self.reshape)  # Register the reshape function to handle window resizing
+
+        # off screen rendering
+        # https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
+        if not display:
+            self.fbo = glGenFramebuffers(1)
+            self.rbo = glGenRenderbuffers(1)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.rbo)
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, RESOLUTION[0], RESOLUTION[1])
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self.fbo)
+            glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.rbo)
 
         glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
         glEnable(GL_BLEND)
@@ -115,6 +137,7 @@ class Visualizer:
         self.vbo_colors = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_colors)
         glBufferData(GL_ARRAY_BUFFER, self.vertices_color.nbytes, self.vertices_color , GL_STATIC_DRAW)
+
 
     # OpenGL reshape function
     def reshape(self, width, height):
@@ -225,18 +248,19 @@ class Board:
     y0 = 0
     x1 = 0
     y1 = 1
-    visualizer: Visualizer
+    visualizer: Canva
 
-    def __init__(self):
+    def __init__(self, display = False):
         self.cells = {}
         self.rows = []
         self.cells_mapping = SortedDict()
+        self.display = display
 
     def parser(self, lg_filename: str):
         with open(lg_filename, "r") as input:
             lg_lines = input.readlines()
         self.x0, self.y0, self.x1, self.y1 = map(float, lg_lines[2].strip().split(' ')[1:])
-        self.visualizer = Visualizer(self.x0, self.y0, self.x1, self.y1)
+        self.visualizer = Canva(self.x0, self.y0, self.x1, self.y1, self.display)
         lg_lines = lg_lines[3:] 
         rows_y = []
         row_x = -1
@@ -314,100 +338,119 @@ class Board:
 
         self.visualizer.updateAllBuffer()
 
-# https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
-def capture_frame():
-    glPixelStorei(GL_PACK_ALIGNMENT, 1)
-    pixels = glReadPixels(0, 0, RESOLUTION[0], RESOLUTION[1], GL_RGB, GL_UNSIGNED_BYTE)
-    frame = np.frombuffer(pixels, dtype=np.uint8)
-    frame = frame.reshape((RESOLUTION[1], RESOLUTION[0], 3))  # Reshape to the correct frame size
-    frame = frame[::-1, :, :]
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Convert from OpenGL's RGB to BGR (OpenCV format)
-    return frame
+class Visualizer:
+    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool):
+        self.start_time = time.time()
+        self.board = Board(display)
+        self.board.parser(lg_file)
 
+        self.optimize_cases: list[OptimizeStep] = []
+        self.optimizeStepInit(opt_file, post_file)
 
-# Run the app
+        self.display = display
+
+        self.video_out = None
+        if output_file:
+            self.video_out = cv2.VideoWriter(output_file, fourcc=cv2.VideoWriter_fourcc(*'mp4v'), 
+                                             fps=60, frameSize=tuple(RESOLUTION)) 
+        if not self.display:
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.visualizer.fbo)
+
+        self.n_step = -1
+
+        # draw first frame
+        if self.display:
+            self.board.visualizer.display()
+        else:
+            self.board.visualizer.draw()
+
+    # combine post and opt data
+    def optimizeStepInit(self, opt_file, post_file):
+        with open(opt_file, "r") as file:
+            opt_lines = file.readlines()
+        with open(post_file, "r") as file:
+            post_lines = file.readlines()
+
+        for i in range(len(post_lines)):
+            post_lines[i] = post_lines[i].strip()
+
+        post_line_idx = 0
+        for line in opt_lines:
+            line = line.strip()
+            parts = line.split(' ')
+
+            name = parts[-5]
+            original_x, original_y, width, height = map(float, parts[-4:])
+            parts = parts[1:-6]
+
+            removed_cells = []
+            for part in parts:
+                removed_cells.append(part)
+
+            moved_cells = []
+            x, y = map(float, post_lines[post_line_idx].split(' '))
+            post_line_idx+=1
+            moved_num = int(post_lines[post_line_idx]) 
+            post_line_idx+=1
+            for i in range(moved_num):
+                parts = post_lines[post_line_idx].split(' ')
+                moved_cells.append((parts[0], tuple(map(float, parts[1:]))))
+                post_line_idx+=1
+
+            self.optimize_cases.append(OptimizeStep(removed_cells, original_x, original_y, 
+                                                    Cell(name, x, y, width, height, False, True, -1), moved_cells))
+            
+    # https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
+    def captureFrame(self):
+        if not self.display:
+            glReadBuffer(GL_COLOR_ATTACHMENT0)
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        pixels = glReadPixels(0, 0, RESOLUTION[0], RESOLUTION[1], GL_BGR, GL_UNSIGNED_BYTE)
+        frame = np.frombuffer(pixels, dtype=np.uint8)
+        frame = frame.reshape((RESOLUTION[1], RESOLUTION[0], 3))  # Reshape to the correct frame size
+        frame = frame[::-1, :, :] # flip, since (0, 0) in opengl is on left top
+        return frame
+    
+    def step(self):
+        if self.video_out:
+            self.video_out.write(self.captureFrame())
+
+        # move to next step
+        self.n_step += 1
+        if self.n_step == len(self.optimize_cases):
+            if self.video_out:
+                self.video_out.release()
+            print(f"visualization finish, cost: {time.time() - self.start_time} secs")
+            glutLeaveMainLoop()
+            return True
+        self.board.step(self.optimize_cases[self.n_step])
+
+        if self.display:
+            self.board.visualizer.display()
+        else:   
+            self.board.visualizer.draw()
+        return False
+
 if __name__ == '__main__':
-    start_time = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('-lg',     type=str, required=True, help="lg file")
     parser.add_argument('-opt',    type=str, required=True, help="opt file")
     parser.add_argument('-postlg', type=str, required=True, help="post file")
     parser.add_argument('-o',      type=str, help="output mp4 file")
+    parser.add_argument('-display',action='store_true')
     args = parser.parse_args()   
     lg_file = args.lg 
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
-    #print(lg_file, opt_file, post_file, output_file)
 
-    board = Board()
-    board.parser(lg_file)
+    #display = output_file is None
+    display = True if args.display else False
+    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display)
 
-    with open(opt_file, "r") as file:
-        opt_lines = file.readlines()
-    with open(post_file, "r") as file:
-        post_lines = file.readlines()
-
-    for i in range(len(post_lines)):
-        post_lines[i] = post_lines[i].strip()
-        
-    # combine post and opt data
-    optimize_cases = []
-    post_line_idx = 0
-    for line in opt_lines:
-        line = line.strip()
-        parts = line.split(' ')
-
-        name = parts[-5]
-        original_x, original_y, width, height = map(float, parts[-4:])
-        parts = parts[1:-6]
-
-        removed_cells = []
-        for part in parts:
-            removed_cells.append(part)
-
-        moved_cells = []
-        x, y = map(float, post_lines[post_line_idx].split(' '))
-        post_line_idx+=1
-        moved_num = int(post_lines[post_line_idx]) 
-        post_line_idx+=1
-        for i in range(moved_num):
-            parts = post_lines[post_line_idx].split(' ')
-            moved_cells.append((parts[0], tuple(map(float, parts[1:]))))
-            post_line_idx+=1
-
-        optimize_cases.append(OptimizeStep(removed_cells, original_x, original_y, Cell(name, x, y, width, height, False, True, -1), moved_cells))
-
-    display = output_file is None
-    delay = 16
-    if not display:
-        delay = 0
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Choose the codec (mp4v for MP4)
-        fps = 60
-        video_out = cv2.VideoWriter(output_file, fourcc, fps, tuple(RESOLUTION)) 
-        frame = capture_frame()
-        video_out.write(frame)
-        #glutHideWindow()
-    case_idx = 0
-    # Main loop for dynamic updates
-    def main_loop(value):
-        global case_idx
-        if case_idx < len(optimize_cases):
-            board.step(optimize_cases[case_idx])
-            case_idx += 1
-        else:
-            if output_file is not None and video_out:
-                video_out.release()
-            print(f"visualization finish, cost: {time.time() - start_time} secs")
-            return
-        
-        glutPostRedisplay()  # Redraw the scene
-        if output_file is not None:
-            frame = capture_frame()
-            video_out.write(frame)
-        glutTimerFunc(delay, main_loop, 0)  # 16ms  = 60 FPS
-    # Start the main loop
-    main_loop(0)
-    glutMainLoop()
-
-    
+    if display:
+        glutIdleFunc(visualizer.step)
+        glutMainLoop()
+    else:
+        while not visualizer.step():
+            pass
