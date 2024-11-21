@@ -38,11 +38,6 @@ class Cell:
         self.color = (0.0, 0.0, 1.0) if is_merge  else ((0.0, 1.0, 0.0) if is_fix else (1.0, 0.0, 0.0))
         self.pos = pos
 
-@dataclass
-class Row:
-    y: float
-    cells: SortedDict[float, Cell]
-
 class Canva:
     def __init__(self, x0, y0, x1, y1, display = True):
         self.x0 = x0
@@ -199,7 +194,6 @@ class Board:
     row_height = -1.
     cells: dict[str, Cell]
     cells_mapping: SortedDict[int, str]
-    rows: list[Row]
     x0 = 0
     y0 = 0
     x1 = 0
@@ -208,7 +202,6 @@ class Board:
 
     def __init__(self, display = False):
         self.cells = {}
-        self.rows = []
         self.cells_mapping = SortedDict()
         self.display = display
 
@@ -217,15 +210,11 @@ class Board:
             lg_lines = input.readlines()
         self.x0, self.y0, self.x1, self.y1 = map(float, lg_lines[2].strip().split(' ')[1:])
         lg_lines = lg_lines[3:] 
-        rows_y = []
         row_x = -1
         for i, line in enumerate(lg_lines):
             line = line.strip()
             if line.startswith("PlacementRows"):
-                x, y, width, height, num = map(float, line.split(' ')[1:])
-                self.lower_row_y = min(self.lower_row_y, y)
-                self.row_height = height
-                rows_y.append(y)
+                pass
             else:
                 name, x, y, width, height, fix = line.split(' ')
                 self.cells[name] = Cell(name, float(x), float(y), float(width), float(height), True if fix == "FIX" else False, False, -1)
@@ -234,26 +223,9 @@ class Board:
         BUFFER_SIZE = len(self.cells) + 10
         self.canva = Canva(self.x0, self.y0, self.x1, self.y1, self.display)
         for cell in self.cells.values():
-            self.insertCell(cell)
             self.canva.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
         self.canva.updateAllBuffer()
-    
-    def insertCell(self, cell: Cell):
-        start_row = int((cell.y - self.lower_row_y)/self.row_height)
-
-        row_idx = start_row
-        while row_idx < len(self.rows) and self.rows[row_idx].y < cell.y + cell.height:
-            assert cell.x not in self.rows[row_idx].cells
-            self.rows[row_idx].cells[cell.x] = cell
-
-    def deleteCell(self, cell: Cell):
-        start_row = int((cell.y - self.lower_row_y)/self.row_height)
-
-        row_idx = start_row
-        while row_idx < len(self.rows) and self.rows[row_idx].y < cell.y + cell.height:
-            assert cell.x in self.rows[row_idx].cells
-            del self.rows[row_idx].cells[cell.x]
 
     # step for opt
     def step(self, optimzieStep: OptimizeStep):
