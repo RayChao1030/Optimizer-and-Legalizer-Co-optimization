@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimize Step Visualization</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 70px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 900px;
+        }
+        .navbar-brand img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+        @media (max-width: 768px) {
+            .navbar-brand {
+                font-size: 0.9em;
+            }
+            .navbar-brand img {
+                width: 25px;
+                height: 25px;
+            }
+        }
+        .title {
+            margin-bottom: 30px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .control-group {
+            flex: 1 1 45%;
+            margin: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        .control-group input[type="number"] {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .control-group .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-start;
+            margin-top: 10px;
+        }
+        .control-group-full {
+            flex: 1 1 100%;
+            text-align: center;
+        }
+        .current-step {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #343a40;
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            padding-top: 25px;
+            height: 0;
+        }
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .dropdown-menu {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .speed-control {
+            margin: 10px 0;
+        }
+        .speed-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .speed-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .speed-buttons button {
+            flex: 1;
+        }
+        #playbackStatus {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- 導航欄部分保持不變 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <div class="navbar-brand">
+                Optimize Step Visualization
+            </div>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <span class="nav-link dropdown-toggle" id="videoDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            選擇影片
+                        </span>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            {% if video_list %}
+                                {% for video in video_list %}
+                                    <a class="dropdown-item video-select" href="#" data-video="{{ video }}">{{ video[:-4] }}</a>
+                                {% endfor %}
+                            {% else %}
+                                <span class="dropdown-item-text">無可用影片</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="text-center mb-4">
+            <h2 id="video-title">{{ video_name }}</h2>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="speed-control">
+                    <label>播放速度控制:</label>
+                    <div class="speed-input-group">
+                        <input type="number" class="form-control" id="speedInput" min="0.001" max="10" step="0.001" value="1">
+                        <input type="range" class="custom-range" id="speedSlider" min="0.001" max="10" step="0.001" value="1">
+                    </div>
+                    <div id="playbackStatus">當前播放速度: 1.000x</div>
+                    <div class="speed-buttons">
+                        <!-- 移除內聯 onclick，改用 data-speed 和事件監聽器 -->
+                        <button class="btn btn-outline-secondary speed-button" data-speed="0.25">0.25x</button>
+                        <button class="btn btn-outline-secondary speed-button" data-speed="0.5">0.5x</button>
+                        <button class="btn btn-outline-secondary speed-button" data-speed="1">1x</button>
+                        <button class="btn btn-outline-secondary speed-button" data-speed="2">2x</button>
+                        <button class="btn btn-outline-secondary speed-button" data-speed="4">4x</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="form-group">
+                    <label for="jump-step">跳轉到哪一步:</label>
+                    <div class="d-flex">
+                        <input type="number" class="form-control mr-2" id="jump-step" min="1" placeholder="輸入步驟數">
+                        <button type="button" class="btn btn-primary mr-2" id="jump-button">跳轉</button>
+                        <button type="button" class="btn btn-success" id="jump-query-button">跳轉＋查詢</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group-full">
+                <div class="current-step">
+                    <span id="current-step">當前 Step: 1</span>
+                    <!-- 添加 "Show Detail" 勾選框 -->
+                    <div class="form-check d-inline-block ml-3">
+                        <input class="form-check-input" type="checkbox" id="show-detail-checkbox">
+                        <label class="form-check-label" for="show-detail-checkbox">
+                            Show Detail
+                        </label>
+                    </div>
+                </div>
+                <!-- 詳細資料顯示區域，初始隱藏 -->
+                <div id="detail-section" class="mt-3" style="display: none;">
+                    <div id="loading-spinner" class="text-center my-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        <p>Loading...</p>
+                    </div>
+                    <div id="detail-content" style="display: none;">
+                        <!-- 詳細資料將動態插入到這裡 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="video-container mb-4">
+            <video id="video-player" controls>
+                {% if video_filename %}
+                    <source src="{{ url_for('serve_static', filename=video_filename) }}" type="video/mp4">
+                {% endif %}
+                您的瀏覽器不支持視頻標籤。
+            </video>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('video-player');
+            const speedInput = document.getElementById('speedInput');
+            const speedSlider = document.getElementById('speedSlider');
+            const playbackStatus = document.getElementById('playbackStatus');
+            const jumpStepInput = document.getElementById('jump-step');
+            const jumpButton = document.getElementById('jump-button');
+            const jumpQueryButton = document.getElementById('jump-query-button'); // 新增
+            const currentStepDisplay = document.getElementById('current-step');
+            const videoTitle = document.getElementById('video-title');
+            const videoSelectElements = document.querySelectorAll('.video-select');
+            const showDetailCheckbox = document.getElementById('show-detail-checkbox');
+            const detailSection = document.getElementById('detail-section');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const detailContent = document.getElementById('detail-content');
+            const speedButtons = document.querySelectorAll('.speed-button'); // 新增
+
+            const STEP_DURATION = 0.016;
+            let currentPlaybackSpeed = 1.0; // 存儲當前播放速度
+
+            // 更新播放速度的函數
+            function updateSpeed(value) {
+                const speed = parseFloat(value);
+                if (speed >= 0.001 && speed <= 10) {
+                    currentPlaybackSpeed = speed; // 更新當前播放速度
+                    speedInput.value = speed;
+                    speedSlider.value = speed;
+                    playbackStatus.textContent = `當前播放速度: ${speed.toFixed(3)}x`;
+                    video.playbackRate = speed;
+                    console.log(`播放速度已設置為: ${video.playbackRate}x`);
+                }
+            }
+
+            // 綁定速度輸入框的事件
+            speedInput.addEventListener('input', (e) => {
+                updateSpeed(e.target.value);
+            });
+
+            speedSlider.addEventListener('input', (e) => {
+                updateSpeed(e.target.value);
+            });
+
+            // 綁定速度按鈕的事件
+            speedButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const speed = button.getAttribute('data-speed');
+                    updateSpeed(speed);
+                });
+            });
+
+            // 跳轉按鈕事件處理
+            jumpButton.addEventListener('click', function() {
+                const step = parseInt(jumpStepInput.value);
+                if (isNaN(step) || step < 1) {
+                    alert('請輸入有效的步驟數（大於等於 1）。');
+                    return;
+                }
+                const targetTime = (step - 1) * STEP_DURATION;
+                if (targetTime > video.duration) {
+                    alert('步驟數超出影片總時長。');
+                    return;
+                }
+                video.currentTime = targetTime;
+            });
+
+            // 跳轉＋查詢按鈕事件處理
+            jumpQueryButton.addEventListener('click', function() {
+                const step = parseInt(jumpStepInput.value);
+                if (isNaN(step) || step < 1) {
+                    alert('請輸入有效的步驟數（大於等於 1）。');
+                    return;
+                }
+                const targetTime = (step - 1) * STEP_DURATION;
+                if (targetTime > video.duration) {
+                    alert('步驟數超出影片總時長。');
+                    return;
+                }
+
+                // 跳轉到指定步驟
+                video.currentTime = targetTime;
+
+                // 暫停視頻以顯示詳細資料
+                video.pause();
+
+                // 顯示詳細區域並顯示載入動畫
+                detailSection.style.display = 'block';
+                loadingSpinner.style.display = 'block';
+                detailContent.style.display = 'none';
+
+                // 發送 API 請求以獲取步驟詳細資料
+                fetch(`/get_step_detail`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        video: videoTitle.textContent.replace(/\.[^/.]+$/, ""),  // 移除副檔名
+                        step: step
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loadingSpinner.style.display = 'none';
+                    if (data.status === 'success') {
+                        // 生成 Bootstrap 表格
+                        let html = `
+                            <table class="table table-bordered">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th colspan="2">Merge Cell</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Merge Cell</td>
+                                        <td>${data.merge_cell}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Merge Cell Position</td>
+                                        <td>(${data.merge_cell_position.x}, ${data.merge_cell_position.y})</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Delete Cell</td>
+                                        <td>${data.delete_cell.join(', ')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Number of Move Cell</td>
+                                        <td>${data.number_of_move_cell}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        `;
+                        if (data.move_cell.length > 0) {
+                            html += `
+                                <table class="table table-bordered">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th>Move Cell</th>
+                                            <th>Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+                            data.move_cell.forEach(cell => {
+                                html += `
+                                    <tr>
+                                        <td>${cell.name}</td>
+                                        <td>(${cell.x}, ${cell.y})</td>
+                                    </tr>
+                                `;
+                            });
+                            html += `</tbody></table>`;
+                        }
+                        detailContent.innerHTML = html;
+                        detailContent.style.display = 'block';
+                    } else {
+                        // 顯示錯誤訊息
+                        detailContent.innerHTML = `<div class="alert alert-warning" role="alert">${data.message}</div>`;
+                        detailContent.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    loadingSpinner.style.display = 'none';
+                    detailContent.innerHTML = `<div class="alert alert-danger" role="alert">Error fetching data.</div>`;
+                    detailContent.style.display = 'block';
+                    console.error('Error:', error);
+                });
+            });
+
+            // 添加 "timeupdate" 事件監聽器以更新當前步驟
+            video.addEventListener('timeupdate', function() {
+                const currentStep = Math.floor(video.currentTime / STEP_DURATION) + 1;
+                currentStepDisplay.textContent = `當前 Step: ${currentStep}`;
+            });
+
+            // 「Show Detail」勾選框事件處理
+            showDetailCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                if (isChecked) {
+                    // 暫停視頻
+                    video.pause();
+                    // 顯示詳細區域並顯示載入動畫
+                    detailSection.style.display = 'block';
+                    loadingSpinner.style.display = 'block';
+                    detailContent.style.display = 'none';
+                    // 獲取當前步驟
+                    const currentStepText = currentStepDisplay.textContent;
+                    const currentStep = parseInt(currentStepText.replace('當前 Step: ', ''));
+                    // 發送 API 請求
+                    fetch(`/get_step_detail`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            video: videoTitle.textContent.replace(/\.[^/.]+$/, ""),  // 移除副檔名
+                            step: currentStep
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        loadingSpinner.style.display = 'none';
+                        if (data.status === 'success') {
+                            // 生成 Bootstrap 表格
+                            let html = `
+                                <table class="table table-bordered">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th colspan="2">Merge Cell</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Merge Cell</td>
+                                            <td>${data.merge_cell}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Merge Cell Position</td>
+                                            <td>(${data.merge_cell_position.x}, ${data.merge_cell_position.y})</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Delete Cell</td>
+                                            <td>${data.delete_cell.join(', ')}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Number of Move Cell</td>
+                                            <td>${data.number_of_move_cell}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            `;
+                            if (data.move_cell.length > 0) {
+                                html += `
+                                    <table class="table table-bordered">
+                                        <thead class="thead-dark">
+                                            <tr>
+                                                <th>Move Cell</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                `;
+                                data.move_cell.forEach(cell => {
+                                    html += `
+                                        <tr>
+                                            <td>${cell.name}</td>
+                                            <td>(${cell.x}, ${cell.y})</td>
+                                        </tr>
+                                    `;
+                                });
+                                html += `</tbody></table>`;
+                            }
+                            detailContent.innerHTML = html;
+                            detailContent.style.display = 'block';
+                        } else {
+                            // 顯示錯誤訊息
+                            detailContent.innerHTML = `<div class="alert alert-warning" role="alert">${data.message}</div>`;
+                            detailContent.style.display = 'block';
+                        }
+                    })
+                    .catch(error => {
+                        loadingSpinner.style.display = 'none';
+                        detailContent.innerHTML = `<div class="alert alert-danger" role="alert">Error fetching data.</div>`;
+                        detailContent.style.display = 'block';
+                        console.error('Error:', error);
+                    });
+                } else {
+                    // 當勾選框被取消時，隱藏詳細區域並恢復播放
+                    detailSection.style.display = 'none';
+                    detailContent.innerHTML = '';
+                    video.play();
+                }
+            });
+
+            // 選擇視頻時重置詳細資料區域
+            videoSelectElements.forEach(function(element) {
+                element.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const selectedVideo = this.getAttribute('data-video');
+                    if (selectedVideo) {
+                        const newSrc = `/static/${selectedVideo}`;
+                        video.pause();
+                        video.setAttribute('src', newSrc);
+                        video.load();
+                        video.play();
+                        videoTitle.textContent = selectedVideo.slice(0, -4);
+                        currentStepDisplay.textContent = '當前 Step: 1';
+                        // 重置詳細資料區域
+                        showDetailCheckbox.checked = false;
+                        detailSection.style.display = 'none';
+                        detailContent.innerHTML = '';
+
+                        // 重新設置播放速率
+                        updateSpeed(currentPlaybackSpeed);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
