@@ -12,7 +12,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 RESOLUTION = [1920, 1080]
-BUFFER_SIZE = 500000
+BUFFER_SIZE = -1
 
 @dataclass(init=False)
 class Cell:
@@ -204,7 +204,7 @@ class Board:
     y0 = 0
     x1 = 0
     y1 = 1
-    visualizer: Canva
+    canva: Canva
 
     def __init__(self, display = False):
         self.cells = {}
@@ -216,7 +216,6 @@ class Board:
         with open(lg_filename, "r") as input:
             lg_lines = input.readlines()
         self.x0, self.y0, self.x1, self.y1 = map(float, lg_lines[2].strip().split(' ')[1:])
-        self.visualizer = Canva(self.x0, self.y0, self.x1, self.y1, self.display)
         lg_lines = lg_lines[3:] 
         rows_y = []
         row_x = -1
@@ -230,12 +229,15 @@ class Board:
             else:
                 name, x, y, width, height, fix = line.split(' ')
                 self.cells[name] = Cell(name, float(x), float(y), float(width), float(height), True if fix == "FIX" else False, False, -1)
-                
+
+        global BUFFER_SIZE
+        BUFFER_SIZE = len(self.cells) + 10
+        self.canva = Canva(self.x0, self.y0, self.x1, self.y1, self.display)
         for cell in self.cells.values():
             self.insertCell(cell)
-            self.visualizer.pushCell(cell)
+            self.canva.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
-        self.visualizer.updateAllBuffer()
+        self.canva.updateAllBuffer()
     
     def insertCell(self, cell: Cell):
         start_row = int((cell.y - self.lower_row_y)/self.row_height)
@@ -260,8 +262,8 @@ class Board:
             last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
             current_cell = self.cells[cell_name]
             # remove current cell by swap back to current and remove back
-            self.visualizer.swapCell(last_cell_idx, current_cell.pos)
-            self.visualizer.popCell()
+            self.canva.swapCell(last_cell_idx, current_cell.pos)
+            self.canva.popCell()
             self.cells_mapping[current_cell.pos] = last_cell_name
             self.cells[last_cell_name].pos = current_cell.pos
 
@@ -269,7 +271,7 @@ class Board:
             del self.cells[cell_name]
 
         self.cells[optimzieStep.added_cell.name] = optimzieStep.added_cell
-        self.visualizer.pushCell(optimzieStep.added_cell)
+        self.canva.pushCell(optimzieStep.added_cell)
         idx = optimzieStep.added_cell.pos
         self.cells_mapping[idx] = optimzieStep.added_cell.name
         self.cells[optimzieStep.added_cell.name].pos = idx
@@ -278,9 +280,9 @@ class Board:
             cell = self.cells[cell_name]
             cell.x = cell_x
             cell.y = cell_y
-            self.visualizer.setCellPosition(cell)
+            self.canva.setCellPosition(cell)
 
-        self.visualizer.updateAllBuffer()
+        self.canva.updateAllBuffer()
 
 def mp4Maker(queue: multiprocessing.Queue, output_file: str, width: int, height: int):
     video_out = cv2.VideoWriter(output_file, fourcc=cv2.VideoWriter_fourcc(*'mp4v'), 
@@ -316,15 +318,15 @@ class Visualizer:
         self.display = display
 
         if not self.display:
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.visualizer.fbo)
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.canva.fbo)
 
         self.n_step = -1
 
         # draw first frame
         if self.display:
-            self.board.visualizer.display()
+            self.board.canva.display()
         else:
-            self.board.visualizer.draw()
+            self.board.canva.draw()
 
     # combine post and opt data
     def optimizeStepInit(self, opt_file, post_file):
@@ -384,9 +386,9 @@ class Visualizer:
         self.board.step(self.optimize_cases[self.n_step])
 
         if self.display:
-            self.board.visualizer.display()
+            self.board.canva.display()
         else:   
-            self.board.visualizer.draw()
+            self.board.canva.draw()
         return False
 
     def terminate(self):
@@ -395,7 +397,7 @@ class Visualizer:
         print(f"visualization finish, cost: {time.time() - self.start_time} secs")
         if self.display:
             #glutLeaveMainLoop()
-            glfw.set_window_should_close(self.board.visualizer.window, True)
+            glfw.set_window_should_close(self.board.canva.window, True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -404,20 +406,18 @@ if __name__ == '__main__':
     parser.add_argument('-postlg', type=str, required=True, help="post file")
     parser.add_argument('-o',      type=str, help="output mp4 file")
     parser.add_argument('-display', action='store_true', help="render screen")
-    parser.add_argument('-max_cell_num', type=int, default=500000, help="max # of cell can be handled")
     args = parser.parse_args()   
     lg_file = args.lg 
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
-    BUFFER_SIZE = args.max_cell_num
 
     #display = output_file is None
     display = True if args.display else False
     visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display)
 
     if display:
-        while not glfw.window_should_close(visualizer.board.visualizer.window):
+        while not glfw.window_should_close(visualizer.board.canva.window):
             visualizer.step()         # Update state
             glfw.poll_events()  # Process events
     else:
