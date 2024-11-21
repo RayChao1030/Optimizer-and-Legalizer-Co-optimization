@@ -456,12 +456,14 @@ if __name__ == '__main__':
     parser.add_argument('-opt',    type=str, required=True, help="opt file")
     parser.add_argument('-postlg', type=str, required=True, help="post file")
     parser.add_argument('-o',      type=str, help="output mp4 file")
-    parser.add_argument('-display',action='store_true')
+    parser.add_argument('-display', action='store_true', help="render screen")
+    parser.add_argument('-max_cell_num', type=int, default=500000, help="max # of cell can be handled")
     args = parser.parse_args()   
     lg_file = args.lg 
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
+    BUFFER_SIZE = args.max_cell_num
 
     #display = output_file is None
     display = True if args.display else False
