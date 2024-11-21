@@ -43,37 +43,6 @@ class Row:
     y: float
     cells: SortedDict[float, Cell]
 
-    def checkOverlap(self, x, width):
-        if x in self.cells:
-            return True
-        idx = self.cells.bisect_right(x)
-        if idx > 0:
-            prev_x, prev_width = self.cells.peekitem(idx - 1)
-            if prev_x + prev_width > x:
-                return True
-        
-        # Check if it overlaps with the block to the right
-        if idx < len(self.cells):
-            next_x, _ = self.cells.peekitem(idx)
-            if next_x < x + width:
-                return True
-        return False
-    
-    def getOverlapCells(self, x, width):
-        overlap_cells: set[str] = set()
-        idx = self.cells.bisect_right(x)
-        if idx > 0:
-            _, prev_cell = self.cells.peekitem(idx - 1)
-            if prev_cell.x + prev_cell.width > x:
-                overlap_cells.add(prev_cell)
-        
-        # Check if it overlaps with the block to the right
-        if idx < len(self.cells):
-            _, next_cell = self.cells.peekitem(idx)
-            if next_cell.x < x + width:
-                overlap_cells.add(next_cell)
-        return overlap_cells 
-
 class Canva:
     def __init__(self, x0, y0, x1, y1, display = True):
         self.x0 = x0
@@ -278,18 +247,6 @@ class Board:
             self.visualizer.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
         self.visualizer.updateAllBuffer()
-
-    def checkOverlap(self, cell: Cell):
-        start_row = int((cell.y - self.lower_row_y)/self.row_height)
-
-        row_idx = start_row
-        while row_idx < len(self.rows) and self.rows[row_idx].y < cell.y + cell.height:
-            overlap = self.rows[row_idx].checkOverlap(cell.x, cell.width)
-            if overlap:
-                return True
-            row_idx += 1
-
-        return False
     
     def insertCell(self, cell: Cell):
         start_row = int((cell.y - self.lower_row_y)/self.row_height)
