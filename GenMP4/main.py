@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from sortedcontainers import SortedDict
 import cv2
 import time
+import multiprocessing
 
 import numpy as np
 from OpenGL.GL import *
@@ -11,6 +12,7 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
 RESOLUTION = [1920, 1080]
+BUFFER_SIZE = 500000
 
 @dataclass(init=False)
 class Cell:
@@ -72,7 +74,6 @@ class Row:
                 overlap_cells.add(next_cell)
         return overlap_cells 
 
-BUFFER_SIZE = 500000
 class Canva:
     def __init__(self, x0, y0, x1, y1, display = True):
         self.x0 = x0
@@ -92,7 +93,7 @@ class Canva:
         glutInit()
         if display:
             glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)  # Double buffer and RGB color mode
-            glutInitWindowSize(RESOLUTION[0], RESOLUTION[1])  # Set window size
+            glutInitWindowSize(*RESOLUTION)  # Set window size
             glutCreateWindow("Visualizer")  # Create window
             glutDisplayFunc(self.display)  # Register the display function
         else:
@@ -102,8 +103,8 @@ class Canva:
             glutHideWindow()
 
             # steup view port 
-            glViewport(0, 0, RESOLUTION[0], RESOLUTION[1])
-            glutDisplayFunc(self.draw)  # Register the display function
+            glViewport(0, 0, *RESOLUTION)
+            glutDisplayFunc(lambda *args: None)  # Register the display function
         
         
         glutReshapeFunc(self.reshape)  # Register the reshape function to handle window resizing
@@ -114,7 +115,7 @@ class Canva:
             self.fbo = glGenFramebuffers(1)
             self.rbo = glGenRenderbuffers(1)
             glBindRenderbuffer(GL_RENDERBUFFER, self.rbo)
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, RESOLUTION[0], RESOLUTION[1])
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, *RESOLUTION)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self.fbo)
             glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.rbo)
 
@@ -154,14 +155,8 @@ class Canva:
         self.setCellPosition(cell)
 
         color = cell.color
-        self.vertices_color[i*8*3+3*0:i*8*3+3*1] = color
-        self.vertices_color[i*8*3+3*1:i*8*3+3*2] = color
-        self.vertices_color[i*8*3+3*2:i*8*3+3*3] = color
-        self.vertices_color[i*8*3+3*3:i*8*3+3*4] = color
-        self.vertices_color[i*8*3+3*4:i*8*3+3*5] = color
-        self.vertices_color[i*8*3+3*5:i*8*3+3*6] = color
-        self.vertices_color[i*8*3+3*6:i*8*3+3*7] = color
-        self.vertices_color[i*8*3+3*7:i*8*3+3*8] = color
+        offset = i*8*3
+        self.vertices_color[offset:offset+24] = color*8
     
     def updateVertexBuffer(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_vertices)
@@ -176,12 +171,12 @@ class Canva:
         self.updateColorBuffer()
 
     def popCell(self):
-        assert self.vertex_num > 0
+        #assert self.vertex_num > 0
         self.vertex_num -= 1
 
     def swapCell(self, i, j):
-        assert i >= 0 and i < self.vertex_num
-        assert j >= 0 and i < self.vertex_num
+        #assert i >= 0 and i < self.vertex_num
+        #assert j >= 0 and i < self.vertex_num
         if i == j:
             return
         i*=24
@@ -191,19 +186,22 @@ class Canva:
 
     def setCellPosition(self, cell: Cell):
         i = cell.pos
-        assert i >= 0 and i < self.vertex_num
+        #assert i >= 0 and i < self.vertex_num
         x = cell.x
         y = cell.y
         width = cell.width
         height = cell.height
-        self.vertices[i*8*3+3*0:i*8*3+3*1] = [x, y, 0.0]
-        self.vertices[i*8*3+3*1:i*8*3+3*2] = [x + width, y, 0.0]
-        self.vertices[i*8*3+3*2:i*8*3+3*3] = [x + width, y, 0.0]
-        self.vertices[i*8*3+3*3:i*8*3+3*4] = [x + width, y + height, 0.0]
-        self.vertices[i*8*3+3*4:i*8*3+3*5] = [x + width, y + height, 0.0]
-        self.vertices[i*8*3+3*5:i*8*3+3*6] = [x, y + height, 0.0]
-        self.vertices[i*8*3+3*6:i*8*3+3*7] = [x, y + height, 0.0]
-        self.vertices[i*8*3+3*7:i*8*3+3*8] = [x, y, 0.0]
+        offset = i*8*3
+        self.vertices[offset:offset + 24] = [
+            x, y, 0.0,
+            x + width, y, 0.0,
+            x + width, y, 0.0,
+            x + width, y + height, 0.0,
+            x + width, y + height, 0.0,
+            x, y + height, 0.0,
+            x, y + height, 0.0,
+            x, y, 0.0
+        ]
 
     def draw(self):
         glClear(GL_COLOR_BUFFER_BIT)
@@ -338,6 +336,21 @@ class Board:
 
         self.visualizer.updateAllBuffer()
 
+def mp4Maker(queue: multiprocessing.Queue, output_file: str, width: int, height: int):
+    video_out = cv2.VideoWriter(output_file, fourcc=cv2.VideoWriter_fourcc(*'mp4v'), 
+                                fps=60, frameSize=(width, height)) 
+    while True:
+        pixels = queue.get()
+        if pixels is None:
+            break
+
+        frame = np.frombuffer(pixels, dtype=np.uint8)
+        frame = frame.reshape((height, width, 3))  # Reshape to the correct frame size
+        frame = frame[::-1, :, :] # flip, since (0, 0) in opengl is on left top
+        video_out.write(frame)
+
+    video_out.release()
+
 class Visualizer:
     def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool):
         self.start_time = time.time()
@@ -347,12 +360,15 @@ class Visualizer:
         self.optimize_cases: list[OptimizeStep] = []
         self.optimizeStepInit(opt_file, post_file)
 
+        self.video_out = False
+        if output_file:
+            self.video_out = True
+            self.queue = multiprocessing.Queue()
+            self.video_process = multiprocessing.Process(target=mp4Maker, args=(self.queue, output_file, *RESOLUTION))
+            self.video_process.start()
+
         self.display = display
 
-        self.video_out = None
-        if output_file:
-            self.video_out = cv2.VideoWriter(output_file, fourcc=cv2.VideoWriter_fourcc(*'mp4v'), 
-                                             fps=60, frameSize=tuple(RESOLUTION)) 
         if not self.display:
             glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.visualizer.fbo)
 
@@ -405,24 +421,20 @@ class Visualizer:
         if not self.display:
             glReadBuffer(GL_COLOR_ATTACHMENT0)
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        pixels = glReadPixels(0, 0, RESOLUTION[0], RESOLUTION[1], GL_BGR, GL_UNSIGNED_BYTE)
-        frame = np.frombuffer(pixels, dtype=np.uint8)
-        frame = frame.reshape((RESOLUTION[1], RESOLUTION[0], 3))  # Reshape to the correct frame size
-        frame = frame[::-1, :, :] # flip, since (0, 0) in opengl is on left top
-        return frame
+        pixels = glReadPixels(0, 0, *RESOLUTION, GL_BGR, GL_UNSIGNED_BYTE)
+        self.queue.put(pixels)
     
+    # return finish or not
     def step(self):
         if self.video_out:
-            self.video_out.write(self.captureFrame())
+            self.captureFrame()
 
         # move to next step
         self.n_step += 1
         if self.n_step == len(self.optimize_cases):
-            if self.video_out:
-                self.video_out.release()
-            print(f"visualization finish, cost: {time.time() - self.start_time} secs")
-            glutLeaveMainLoop()
+            self.terminate()
             return True
+
         self.board.step(self.optimize_cases[self.n_step])
 
         if self.display:
@@ -430,6 +442,13 @@ class Visualizer:
         else:   
             self.board.visualizer.draw()
         return False
+
+    def terminate(self):
+        self.queue.put(None)
+        self.video_process.join()
+        print(f"visualization finish, cost: {time.time() - self.start_time} secs")
+        if self.display:
+            glutLeaveMainLoop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
