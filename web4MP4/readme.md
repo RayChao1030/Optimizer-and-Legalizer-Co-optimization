@@ -17,7 +17,7 @@ by providing step-by-step visualization and detailed insights. This project inte
 
 ## Features & Demo
 
-![Optimize Step Visualization Demo](https://youtu.be/JjrR2taUtbU)
+[Optimize Step Visualization Demo](https://youtu.be/JjrR2taUtbU)
 
 *Note: Replace the above placeholder with an actual screenshot or gif of the application in action.*
 
