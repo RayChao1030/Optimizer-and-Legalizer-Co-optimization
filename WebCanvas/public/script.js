@@ -28,6 +28,7 @@ let currentBankingIndex = 0;
 let cellsByName = {};
 let movingCells = {};
 let pendingMergedCell = null;
+let mergedCellsSet = new Set();
 let videoPrefix = "";
 let isRecording = NOT_RECORDING;
 let isAnimationRunning = false;
@@ -323,6 +324,7 @@ function setupCurrentBankingAnimation() {
   const bankingCell = bankingCells[currentBankingIndex];
   pendingMergedCell = createMergedCell(bankingCell);
   movingCells = prepareMovingCells(bankingCell);
+  mergedCellsSet.add(pendingMergedCell.name);
 
   animationProgress = 0;
 }
@@ -366,7 +368,14 @@ function prepareMovingCells(bankingCell) {
     const cell = cellsByName[name];
     if (cell) {
       cell.moving = true;
-      cell.color = "orange";
+
+      // Check if the cell is in the mergedCellsSet
+      if (mergedCellsSet.has(name)) {
+        cell.color = "blue"; // Keep blue for merged cells
+      } else {
+        cell.color = "orange"; // Default color for other moved cells
+      }
+
       cells[name] = {
         cell,
         startX: cell.x,
@@ -380,6 +389,20 @@ function prepareMovingCells(bankingCell) {
   return cells;
 }
 
+function removeCell(cellName) {
+  // Remove from cellsByName
+  if (cellsByName[cellName]) {
+    delete cellsByName[cellName];
+  }
+
+  // Remove from mergedCellsSet if it exists
+  if (mergedCellsSet.has(cellName)) {
+    mergedCellsSet.delete(cellName);
+  }
+
+  console.log(`Cell ${cellName} has been removed.`);
+}
+
 function finalizeAnimationStep() {
   Object.values(movingCells).forEach(({ cell, endX, endY }) => {
     cell.x = endX;
@@ -388,9 +411,9 @@ function finalizeAnimationStep() {
   });
 
   // Remove original cells and add the merged cell
-  bankingCells[currentBankingIndex].originalCells.forEach(
-    (name) => delete cellsByName[name]
-  );
+  bankingCells[currentBankingIndex].originalCells.forEach((name) => {
+    removeCell(name);
+  });
   cellsByName[pendingMergedCell.name] = pendingMergedCell;
 
   currentBankingIndex++;
