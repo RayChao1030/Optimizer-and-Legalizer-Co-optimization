@@ -2,11 +2,9 @@ import numpy as np
 import argparse
 from dataclasses import dataclass
 from sortedcontainers import SortedDict
-import cv2
 import time
-import multiprocessing
 import glfw
-
+import ffmpeg
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -77,13 +75,11 @@ class Canva:
             self.fbo = glGenFramebuffers(1)
             self.rbo = glGenRenderbuffers(1)
             glBindRenderbuffer(GL_RENDERBUFFER, self.rbo)
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, *RESOLUTION)
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, *RESOLUTION)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self.fbo)
             glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.rbo)
 
         glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
         # Set up the orthogonal projection to fit the rectangles in the window
         glMatrixMode(GL_PROJECTION)
@@ -256,23 +252,8 @@ class Board:
 
         self.canva.updateAllBuffer()
 
-def mp4Maker(queue: multiprocessing.Queue, output_file: str, width: int, height: int):
-    video_out = cv2.VideoWriter(output_file, fourcc=cv2.VideoWriter_fourcc(*'mp4v'), 
-                                fps=60, frameSize=(width, height)) 
-    while True:
-        pixels = queue.get()
-        if pixels is None:
-            break
-
-        frame = np.frombuffer(pixels, dtype=np.uint8)
-        frame = frame.reshape((height, width, 3))  # Reshape to the correct frame size
-        frame = frame[::-1, :, :] # flip, since (0, 0) in opengl is on left top
-        video_out.write(frame)
-
-    video_out.release()
-
 class Visualizer:
-    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool):
+    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool, args):
         self.start_time = time.time()
         self.board = Board(display)
         self.board.parser(lg_file)
@@ -283,9 +264,14 @@ class Visualizer:
         self.video_out = False
         if output_file:
             self.video_out = True
-            self.queue = multiprocessing.Queue()
-            self.video_process = multiprocessing.Process(target=mp4Maker, args=(self.queue, output_file, *RESOLUTION))
-            self.video_process.start()
+            self.process = (
+                ffmpeg
+                .input('pipe:0', format='rawvideo', pix_fmt='rgb24', s=f'{RESOLUTION[0]}x{RESOLUTION[1]}', framerate=args.framerate)
+                .filter('vflip') # vertical flip to convert opengl coordinate to normal coordinate
+                .output(output_file, pix_fmt=args.pix_fmt, vcodec=args.vcodec, crf=args.crf, preset=args.preset)
+                .overwrite_output() # override output if exist
+                .run_async(pipe_stdin=True)
+            )
 
         self.display = display
 
@@ -341,8 +327,8 @@ class Visualizer:
         if not self.display:
             glReadBuffer(GL_COLOR_ATTACHMENT0)
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        pixels = glReadPixels(0, 0, *RESOLUTION, GL_BGR, GL_UNSIGNED_BYTE)
-        self.queue.put(pixels)
+        pixels = glReadPixels(0, 0, *RESOLUTION, GL_RGB, GL_UNSIGNED_BYTE)
+        self.process.stdin.write(pixels)
     
     # return finish or not
     def step(self):
@@ -364,11 +350,10 @@ class Visualizer:
         return False
 
     def terminate(self):
-        self.queue.put(None)
-        self.video_process.join()
+        self.process.stdin.close()
+        self.process.wait() 
         print(f"visualization finish, cost: {time.time() - self.start_time} secs")
         if self.display:
-            #glutLeaveMainLoop()
             glfw.set_window_should_close(self.board.canva.window, True)
 
 if __name__ == '__main__':
@@ -378,15 +363,26 @@ if __name__ == '__main__':
     parser.add_argument('-postlg', type=str, required=True, help="post file")
     parser.add_argument('-o',      type=str, help="output mp4 file")
     parser.add_argument('-display', action='store_true', help="render screen")
+    # ffmpeg format
+    parser.add_argument('-pix_fmt', type=str, default='yuv444p', help="ffmpeg option, pixel format")
+    parser.add_argument('-framerate', type=int, default=60, help="ffmpeg option, fps")
+    parser.add_argument('-vcodec', type=str, default='h264', help="ffmpeg option, encoder to use")
+    parser.add_argument('-preset', type=str, default='veryfast', 
+                        help="""ffmpeg option, slower preset will provide better compression (compression is quality per filesize).
+                             available value: ultrafast, superfast, veryfast, faster, fast, medium(default in ffmpeg), slow, slower, veryslow
+                             """)
+    parser.add_argument('-crf', type=int, default=18, 
+                        help="""ffmpeg option, the qulaity of output, lower value means higher quality. 
+                                0 for lossless, 18 for visually lossless in h264. 
+                                ffmpeg default value is 23 for h264, 28 for h265""")
     args = parser.parse_args()   
     lg_file = args.lg 
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
 
-    #display = output_file is None
     display = True if args.display else False
-    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display)
+    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display, args)
 
     if display:
         while not glfw.window_should_close(visualizer.board.canva.window):
