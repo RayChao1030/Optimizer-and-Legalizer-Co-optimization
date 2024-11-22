@@ -2,7 +2,7 @@
 
 ## 動畫展示
 
-![demo](./video/output.gif)
+![demo](./video/demo.gif)
 
 ---
 
