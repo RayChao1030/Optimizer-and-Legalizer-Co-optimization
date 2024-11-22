@@ -41,6 +41,7 @@ python -m venv venv
 source venv/bin/activate  # Linux/MacOS
 venv\Scripts\activate     # Windows
 pip install matplotlib    # 安裝必要套件
+```
 
 ## 2. 準備測試檔案
 將測試檔案放置於 ../testcases/ 資料夾下
