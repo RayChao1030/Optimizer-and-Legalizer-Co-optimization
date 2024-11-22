@@ -2,11 +2,7 @@
 
 ## 動畫展示
 
-<video width="800" height="600" controls>
-  <source src="./video/testcase1_16900_20241122_165801.mp4" type="video/mp4">
-  您的瀏覽器不支援 HTML5 視訊標籤，請下載檔案觀看：
-  <a href="./video/testcase1_16900_20241122_165801.mp4">下載 MP4 檔案</a>
-</video>
+![demo](./video/output.gif)
 
 ---
 
