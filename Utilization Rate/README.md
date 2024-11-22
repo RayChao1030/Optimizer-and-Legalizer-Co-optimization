@@ -45,17 +45,22 @@ pip install matplotlib    # 安裝必要套件
 
 ## 2. 準備測試檔案
 將測試檔案放置於 ../testcases/ 資料夾下
-
+```plaintext
 <測試檔案名稱>.lg
 <測試檔案名稱>.opt
 testcases/testcase1_16900.lg
 testcases/testcase1_16900.opt
+```
 
 ## 3. 執行程式
+```plaintext
 python draw_utilization_rate.py
+```
 
 ## 4. 輸出結果
+```plaintext
 testcase1_16900_die_usage_rate_plot.png
+```
 
 ## 5. 圖例
 - X 軸：步驟
