@@ -1,21 +1,19 @@
 # Fast Optimization Visualizer
 
 ## Requirements
-- **Platform**: Tested on Windows. Other platforms have not been tested.
+- **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
 - The environment can be set up using the `environment.yml` file.
-- **PyOpenGL Issue**: Installing PyOpenGL directly with `pip` may not work. If you encounter issues, download and install the appropriate wheel file manually from [here](https://github.com/cgohlke/pyopengl-build/releases/tag/v3.1.8).
 
 ## Usage
 To run the visualizer, use the following command:
 ```bash
-$ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display] [-max_cell_num NUM]
+$ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
 ```
 Alternatively, you can run the executable file:
 ```bash
-$ visualizer.exe -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display] [-max_cell_num NUM]
+$ visualizer.exe -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
 ```
 - `-display`: Enables rendering the frames on the screen. If not set, the rendering process will be faster.
-- `-max_cell_num`: Sets the maximum number of cells in the test case. The default is `500000`. Increase this value if your test case contains more cells.
 
 
 - The visualizer will generate a 60 FPS MP4 video, where each step is displayed for 1 frame (1/60 s).
