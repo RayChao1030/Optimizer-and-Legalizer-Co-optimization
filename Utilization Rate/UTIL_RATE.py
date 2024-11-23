@@ -3,11 +3,15 @@ import re
 from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 #import cv2
 import argparse
 from matplotlib.colors import LinearSegmentedColormap
 import math
+import imageio
+import io
+
+from PIL import Image
+
 # Component class to hold information about each component
 class Component:
     def __init__(self, name, x, y, w, h, is_fixed):
@@ -118,6 +122,7 @@ def read_lg_file(file_path: str, placement_rows: List[PlacementRow], components:
 
 
 # Function to read and parse the opt file
+
 def read_opt_file(file_path: str, banking_cells: List[BankingCell]) -> None:
     """
     Parse OPT file and populate the banking_cells list.
@@ -206,26 +211,81 @@ def parse_arguments():
     parser.add_argument("stepCut", type=int, help="Step interval for saving intermediate heatmaps.")
     return parser.parse_args()
 
+''' 
+### for gif
+def remove_transparency(image_folder: str, background_color=(255, 255, 255)):
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Use .lower() to ensure case-insensitive match
+            img_path = os.path.join(image_folder, file)
+            img = Image.open(img_path)
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, background_color)
+                background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                background.save(img_path)
+                print(f"Removed transparency from {file}")
+
+def resize_images_to_uniform_size(image_folder: str, target_size: tuple):
+    """
+    Resize all images in the folder to the target size.
+
+    Args:
+        image_folder (str): Directory containing images.
+        target_size (tuple): Target size as (width, height).
+    """
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Ensure only .png files are processed
+            img_path = os.path.join(image_folder, file)
+            img = Image.open(img_path)
+            resized_img = img.resize(target_size, resample=Image.Resampling.LANCZOS)
+            resized_img.save(img_path)
+            print(f"Resized {file} to {target_size}")
+
+
+def check_image_shapes(image_folder: str):
+    """
+    Check and print the dimensions and mode of PNG images in the folder.
+    """
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Ensure only .png files are processed
+            img = Image.open(os.path.join(image_folder, file))
+            print(f"Image: {file}, Size: {img.size}, Mode: {img.mode}")
+
+
+def create_gif(image_folder: str, gif_filename: str, duration: float):
+    """
+    Create a GIF from a sequence of PNG images in a specified folder.
+
+    Args:
+        image_folder (str): Path to the folder containing images.
+        gif_filename (str): Output GIF file path.
+        duration (float): Duration of each frame in seconds.
+    """
+    # Collect only .png files, sorted by filename
+    images = sorted([os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(".png")])
+
+    # Read and save images as a GIF
+    gif_images = [imageio.imread(img) for img in images]
+    imageio.mimsave(gif_filename, gif_images, duration=duration)
+    print(f"GIF saved to {gif_filename}")
+
+'''
+###
+
+import io
+from PIL import Image
 
 def main():
-    #color
     # 灰階的深淺降低幅度
-    colors = [(1, 1, 1), (0.7, 0.7, 0.7), (0.3, 0.3, 0.3)]  # 保留平緩和次陡降
-    positions = [0.0, 0.5, 1.0]  # 新的區間：平緩(0.0-0.5)、次陡降(0.5-1.0)
-    custom_cmap = LinearSegmentedColormap.from_list("custom_greys", list(zip(positions, colors)))
-
-    # 初始容器
-    xStepNum = 10.0
-    yStepNum = 10.0
-    stepCut = 1000
+    colors = [(1, 1, 1), (1, 1, 0), (1, 0, 0)]  # 白色 -> 黃色 -> 紅色
+    positions = [0.0, 0.5, 1.0]  # 對應位置
+    custom_cmap = LinearSegmentedColormap.from_list("custom_red_yellow_white", list(zip(positions, colors)))
 
     # Parse command-line arguments
     args = parse_arguments()
-    # 使用命令列參數
     lgfile = args.lgfile
     optfile = args.optfile
     postfile = args.postfile
-    utilGraphDir = args.utilGraphDir
+    utilGraphDir = args.utilGraphDir  # For saving final GIF
     xStepNum = args.xStepNum
     yStepNum = args.yStepNum
     stepCut = args.stepCut
@@ -239,7 +299,7 @@ def main():
     merged_ff_updates = []
     placement_rows = []
 
-    # 呼叫讀取函式
+    # Read input files
     print(f"Reading LG file: {lgfile}")
     read_lg_file(lgfile, placement_rows, components)
 
@@ -249,32 +309,30 @@ def main():
     print(f"Reading POST file: {postfile}")
     read_post_file(postfile, banking_cells, merged_ff_updates)
 
-    ###### 計算 util rate 
-    ######
-    
-    # 計算 bounding box
-    #if placement_rows:
+    # Calculate bounding box
     min_x = min(row.x for row in placement_rows)
     min_y = min(row.y for row in placement_rows)
     max_x = max(row.x + row.site_width * row.num_sites for row in placement_rows)
     max_y = placement_rows[-1].y + placement_rows[-1].site_height
-    #print(f"Bounding box: ({min_x}, {min_y}), ({max_x}, {max_y})")
     x_step = (max_x - min_x) / xStepNum
     y_step = (max_y - min_y) / yStepNum
 
-
-    # 初始化 grid utilization
+    # Initialize grid utilization
     grid_utilization = [[0.0 for _ in range(xStepNum)] for _ in range(yStepNum)]
     grid_area = x_step * y_step
-    # 計算 opt 前的 util rate
+
+    # Create a list to store frames for the GIF
+    gif_frames = []
+
+    # Pre-opt utilization
     for component in components:
         if component.x + component.w > max_x or component.y + component.h > max_y:
             print(f"Component {component.name} exceeds bounds: x+w={component.x + component.w}, y+h={component.y + component.h}")
         
-        startXidx = math.floor((component.x-min_x)/x_step) #小
-        endXidx = math.ceil((component.x + component.w-min_x)/x_step) # 大
-        startYidx = math.floor((component.y-min_y)/y_step)
-        endYidx = math.ceil((component.y + component.h-min_y)/y_step)
+        startXidx = math.floor((component.x - min_x) / x_step)
+        endXidx = math.ceil((component.x + component.w - min_x) / x_step)
+        startYidx = math.floor((component.y - min_y) / y_step)
+        endYidx = math.ceil((component.y + component.h - min_y) / y_step)
 
         for j in range(startYidx, endYidx):
             grid_min_y = min_y + j * y_step
@@ -291,37 +349,38 @@ def main():
                 if overlap_min_x <= overlap_max_x and overlap_min_y <= overlap_max_y:
                     overlap_area = (overlap_max_x - overlap_min_x) * (overlap_max_y - overlap_min_y)
                     grid_utilization[j][i] += overlap_area / grid_area
-                
-    #  畫圖並將圖片轉為 NumPy 陣列
+
+    # Add initial heatmap to GIF frames
     fig, ax = plt.subplots(figsize=(8, 6))
     utilization_array = np.array(grid_utilization)
-    cax = ax.imshow(utilization_array, cmap=custom_cmap, interpolation="nearest", origin="lower", vmin=0, vmax=1)
-    ax.set_title("Grid Utilization Heatmap")
+    vmin, vmax = utilization_array.min(), utilization_array.max()
+    cax = ax.imshow(utilization_array, cmap=custom_cmap, interpolation="nearest", origin="lower", vmin=vmin, vmax=vmax)
+    #ax.set_title("Grid Utilization Heatmap")
+    ax.set_title(f"Grid Utilization Heatmap (Step {-1}, initial log layout)")
     ax.set_xlabel("Grid X Index")
     ax.set_ylabel("Grid Y Index")
     fig.colorbar(cax, ax=ax, label="Utilization")
 
-    # 加入每格的數值標籤
+    default_fontsize = plt.rcParams['font.size']  # 默認字體大小
+    small_fontsize = default_fontsize * 0.75  # 縮小到 80%
     for j in range(yStepNum):
-        for i in range(xStepNum):
-            ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
+            for i in range(xStepNum):
+                ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black', fontsize=small_fontsize)
 
-    # 儲存圖片，檔名包含流水號（從0開始）
-    if not os.path.exists(utilGraphDir):
-        os.makedirs(utilGraphDir)  # 創建目錄
+    #print(utilization_array)
+    #plt.show()
 
-    file_prefix = os.path.splitext(os.path.basename(lgfile))[0]
-    serial_number = 0
-    fn = os.path.join(utilGraphDir, f"{file_prefix}_{serial_number}.png")
-    fig.savefig(fn, dpi=300)
-    print(f"Saved: {fn}")
-    # 關閉圖表以節省資源
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    buf.seek(0)
+    gif_frames.append(Image.open(buf).convert("RGB"))  # Convert to ensure consistency
+    buf.close()
     plt.close(fig)
 
-    ###### 進行 opt ######
-    ######
-    # 進行 opt 並且計算 util rate
+    # Optimization steps
     for k, cell in enumerate(banking_cells):
+        # Update grid utilization for deleted and moved cells
+        # ... (retain your existing logic for grid updates)
         # 刪除 banked cells
         for delname in cell.ff_list:
             # 刪除利用率
@@ -431,38 +490,44 @@ def main():
                                     #print(f"Move + {moved.name} from ({comp.x}, {comp.y}) to ({moved.x}, {moved.y})")
                         
                         break
-
-
-        if(((k%stepCut == 0 ) and k > 0) or k == len(banking_cells) - 1): # 根據 stepcut 畫圖
-
-            #  畫圖並將圖片轉為 NumPy 陣列
+        
+        # Add intermediate heatmap to GIF frames
+        if (k % stepCut == 0 and k > 0) or k == len(banking_cells) - 1:
             fig, ax = plt.subplots(figsize=(8, 6))
             utilization_array = np.array(grid_utilization)
+            vmin, vmax = utilization_array.min(), utilization_array.max()
             cax = ax.imshow(utilization_array, cmap=custom_cmap, interpolation="nearest", origin="lower", vmin=0, vmax=1)
-            ax.set_title("Grid Utilization Heatmap")
+            #ax.set_title("Grid Utilization Heatmap")
+            ax.set_title(f"Grid Utilization Heatmap (Step {k})")
             ax.set_xlabel("Grid X Index")
             ax.set_ylabel("Grid Y Index")
             fig.colorbar(cax, ax=ax, label="Utilization")
 
-            # 加入每格的數值標籤
+            default_fontsize = plt.rcParams['font.size']  # 默認字體大小
+            small_fontsize = default_fontsize * 0.75  # 縮小到 80%
             for j in range(yStepNum):
                 for i in range(xStepNum):
-                    ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
+                    ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black', fontsize=small_fontsize)
 
-            # 儲存圖片，檔名包含流水號（從0開始）
-            if not os.path.exists(utilGraphDir):
-                os.makedirs(utilGraphDir)  # 創建目錄
-
-            file_prefix = os.path.splitext(os.path.basename(lgfile))[0]
-            serial_number = k // stepCut   # 計算流水號 k >=  stepcut iff. 流水號 >= 1
-            fn = os.path.join(utilGraphDir, f"{file_prefix}_{serial_number}.png")
-
-            fig.savefig(fn, dpi=300)
-
-            print(f"Saved: {fn}")
-
-            # 關閉圖表以節省資源
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+            buf.seek(0)
+            gif_frames.append(Image.open(buf).convert("RGB"))  # Convert to ensure consistency
+            buf.close()
             plt.close(fig)
+
+    # Save the GIF
+    gif_output_path = os.path.join(utilGraphDir, "output.gif")
+    gif_frames[0].save(
+        gif_output_path,
+        save_all=True,
+        append_images=gif_frames[1:],
+        duration=200,  # Duration in milliseconds
+        loop=0
+    )
+    print(f"GIF saved to {gif_output_path}")
+
+
 
 
 if __name__ == "__main__":
