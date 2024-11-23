@@ -12,12 +12,17 @@ from OpenGL.GLU import *
 RESOLUTION = [1920, 1080]
 BUFFER_SIZE = -1
 
+
 MERGE_COLOR = (0.0, 0.0, 1.0)
 ACTIVE_MERGE_COLOR = (0.0, 1.0, 1.0)
-NOTFIX_COLOR = (0.4, 0.4, 0.4)
-FIX_COLOR = (0.8, 0.8, 0.8)
+NOTFIX_COLOR = (0.0, 1.0, 0.0)
+FIX_COLOR = (1.0, 0.0, 0.0)
 LEGAL_COLOR = (0.0, 1.0, 0.0)
 ILLEGAL_COLOR = (1.0, 0.0, 0.0)
+
+# override above setting in detail mode
+DETAIL_NOTFIX_COLOR = (0.4, 0.4, 0.4)
+DETAIL_FIX_COLOR = (0.8, 0.8, 0.8)
 
 @dataclass(init=False)
 class Cell:
@@ -40,7 +45,7 @@ class Cell:
         self.height = height
         self.is_fix = is_fix
         self.is_merge = is_merge
-        self.color = MERGE_COLOR if is_merge else (NOTFIX_COLOR if is_fix else FIX_COLOR)
+        self.color = MERGE_COLOR if is_merge else (FIX_COLOR if is_fix else NOTFIX_COLOR)
         self.pos = pos
 
 class Canva:
@@ -350,7 +355,7 @@ class Board:
                 self.cells_mapping[idx] = self.prev_merge_cell.name
                 self.cells[self.prev_merge_cell.name].pos = idx
             for cell in self.prev_moved_cells:
-                cell.color = MERGE_COLOR if cell.is_merge else FIX_COLOR
+                cell.color = MERGE_COLOR if cell.is_merge else NOTFIX_COLOR
                 self.canva.setCellColor(cell)
                 if cell.is_merge:
                     z = -1
@@ -555,6 +560,10 @@ if __name__ == '__main__':
     post_file = args.postlg
     output_file = args.o
     detail = args.detail
+
+    if detail:
+        NOTFIX_COLOR = DETAIL_NOTFIX_COLOR
+        FIX_COLOR = DETAIL_FIX_COLOR
 
     display = True if args.display else False
     visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display, detail, args)

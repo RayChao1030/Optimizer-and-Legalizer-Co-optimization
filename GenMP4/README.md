@@ -47,13 +47,12 @@ $ ffmpeg -ss 30 -t 3 -i input.mp4 \
 -  Detailed instructions are available in this [Stack Exchange post](https://superuser.com/questions/556029/how-do-i-convert-a-video-to-gif-using-ffmpeg-with-reasonable-quality)
 
 ## Color Guide
-
-1. **Gray**: Not fixed cells
-2. **Dark Gray**: Fixed cells
-3. **Blue**: Merged cells
-4. **Cyan (Filled)**: Merged cell in current step
-5. **Red**: Cells needing legalization
-6. **Green**: Cells legalized in this step
+1. **Not Fixed Cells**: grey in detail mode, green in nomal mode
+2. **Fixed Cells**: dark gray in detail mode, red in nomal mode
+3. **Merged Cells**: blue
+4. **Current Step Merged Cell**: Cyan (filled)
+5. **Cells Needing Legalization**: red, detail mode only
+6. **Cells Legalized in This Step**: green, detail mode only
 - You can change all above color in the header part of `main.py`
 
 ## Results
