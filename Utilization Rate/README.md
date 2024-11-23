@@ -26,7 +26,7 @@
 ├── _draw_utilization_rate.py
 ├── _util.py
 ├── tc
-└── venv  # Python 虛擬環境
+└── myenv  # Python 虛擬環境
 
 ```
 
@@ -38,9 +38,8 @@
 在專案目錄下執行以下指令：
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/MacOS
-venv\Scripts\activate     # Windows
+source myenv/bin/activate  # Linux/MacOS
+myenv\Scripts\activate     # Windows
 pip install matplotlib    # 安裝必要套件
 ```
 
@@ -49,10 +48,10 @@ pip install matplotlib    # 安裝必要套件
 
 ## 3. 執行程式
 ```bash
-python UTIL_RATE 16900 # 測試 testcase 16900 
-python UTIL_RATE 5000 # 測試 testcase 5000 
-python UTIL_RATE 100 # 測試 testcase 100 
-python UTIL_RATE 7000 # 測試 testcase 7000 
+python UTIL_RATE.py 16900 # 測試 testcase 16900 
+python UTIL_RATE.py 5000 # 測試 testcase 5000 
+python UTIL_RATE.py 100 # 測試 testcase 100 
+python UTIL_RATE.py 7000 # 測試 testcase 7000 
 ```
 
 ## 4. 輸出結果
