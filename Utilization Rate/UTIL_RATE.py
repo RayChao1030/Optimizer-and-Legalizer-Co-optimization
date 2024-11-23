@@ -360,9 +360,12 @@ def main():
     ax.set_xlabel("Grid X Index")
     ax.set_ylabel("Grid Y Index")
     fig.colorbar(cax, ax=ax, label="Utilization")
+
+    default_fontsize = plt.rcParams['font.size']  # 默認字體大小
+    small_fontsize = default_fontsize * 0.75  # 縮小到 80%
     for j in range(yStepNum):
             for i in range(xStepNum):
-                ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
+                ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black', fontsize=small_fontsize)
 
     #print(utilization_array)
     #plt.show()
@@ -499,9 +502,12 @@ def main():
             ax.set_xlabel("Grid X Index")
             ax.set_ylabel("Grid Y Index")
             fig.colorbar(cax, ax=ax, label="Utilization")
+
+            default_fontsize = plt.rcParams['font.size']  # 默認字體大小
+            small_fontsize = default_fontsize * 0.75  # 縮小到 80%
             for j in range(yStepNum):
                 for i in range(xStepNum):
-                    ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
+                    ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black', fontsize=small_fontsize)
 
             buf = io.BytesIO()
             fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
