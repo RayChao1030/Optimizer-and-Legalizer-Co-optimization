@@ -3,11 +3,14 @@ import re
 from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 #import cv2
 import argparse
 from matplotlib.colors import LinearSegmentedColormap
 import math
+import imageio
+
+from PIL import Image
+
 # Component class to hold information about each component
 class Component:
     def __init__(self, name, x, y, w, h, is_fixed):
@@ -206,6 +209,64 @@ def parse_arguments():
     parser.add_argument("stepCut", type=int, help="Step interval for saving intermediate heatmaps.")
     return parser.parse_args()
 
+### for gif
+def remove_transparency(image_folder: str, background_color=(255, 255, 255)):
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Use .lower() to ensure case-insensitive match
+            img_path = os.path.join(image_folder, file)
+            img = Image.open(img_path)
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, background_color)
+                background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                background.save(img_path)
+                print(f"Removed transparency from {file}")
+
+def resize_images_to_uniform_size(image_folder: str, target_size: tuple):
+    """
+    Resize all images in the folder to the target size.
+
+    Args:
+        image_folder (str): Directory containing images.
+        target_size (tuple): Target size as (width, height).
+    """
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Ensure only .png files are processed
+            img_path = os.path.join(image_folder, file)
+            img = Image.open(img_path)
+            resized_img = img.resize(target_size, resample=Image.Resampling.LANCZOS)
+            resized_img.save(img_path)
+            print(f"Resized {file} to {target_size}")
+
+
+def check_image_shapes(image_folder: str):
+    """
+    Check and print the dimensions and mode of PNG images in the folder.
+    """
+    for file in sorted(os.listdir(image_folder)):
+        if file.lower().endswith(".png"):  # Ensure only .png files are processed
+            img = Image.open(os.path.join(image_folder, file))
+            print(f"Image: {file}, Size: {img.size}, Mode: {img.mode}")
+
+
+def create_gif(image_folder: str, gif_filename: str, duration: float):
+    """
+    Create a GIF from a sequence of PNG images in a specified folder.
+
+    Args:
+        image_folder (str): Path to the folder containing images.
+        gif_filename (str): Output GIF file path.
+        duration (float): Duration of each frame in seconds.
+    """
+    # Collect only .png files, sorted by filename
+    images = sorted([os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(".png")])
+
+    # Read and save images as a GIF
+    gif_images = [imageio.imread(img) for img in images]
+    imageio.mimsave(gif_filename, gif_images, duration=duration)
+    print(f"GIF saved to {gif_filename}")
+
+
+###
 
 def main():
     #color
@@ -313,7 +374,7 @@ def main():
     file_prefix = os.path.splitext(os.path.basename(lgfile))[0]
     serial_number = 0
     fn = os.path.join(utilGraphDir, f"{file_prefix}_{serial_number}.png")
-    fig.savefig(fn, dpi=300)
+    fig.savefig(fn, dpi=300, bbox_inches="tight")
     print(f"Saved: {fn}")
     # 關閉圖表以節省資源
     plt.close(fig)
@@ -457,12 +518,33 @@ def main():
             serial_number = k // stepCut   # 計算流水號 k >=  stepcut iff. 流水號 >= 1
             fn = os.path.join(utilGraphDir, f"{file_prefix}_{serial_number}.png")
 
-            fig.savefig(fn, dpi=300)
+            fig.savefig(fn, dpi=300, bbox_inches="tight")
 
             print(f"Saved: {fn}")
 
             # 關閉圖表以節省資源
             plt.close(fig)
+
+    
+    # 製作 gif
+    # Step 1: Verify image dimensions
+    print("Checking image shapes...")
+    check_image_shapes(utilGraphDir)
+
+    # Step 2: Resize images if necessary
+    target_size = (800, 600)  # Adjust based on your images
+    print(f"Resizing images to uniform size: {target_size}")
+    resize_images_to_uniform_size(utilGraphDir, target_size)
+
+    # Step 3: Remove transparency if applicable
+    print("Removing transparency from images...")
+    remove_transparency(utilGraphDir)
+
+    # Step 4: Generate GIF
+    gif_output_path = os.path.join(utilGraphDir, "output.gif")
+    print("Creating GIF...")
+    create_gif(utilGraphDir, gif_output_path, duration=500)
+
 
 
 if __name__ == "__main__":
