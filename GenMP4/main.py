@@ -33,7 +33,7 @@ class Cell:
         self.height = height
         self.is_fix = is_fix
         self.is_merge = is_merge
-        self.color = (0.0, 0.0, 1.0) if is_merge  else ((0.0, 1.0, 0.0) if is_fix else (1.0, 0.0, 0.0))
+        self.color = (0.0, 0.0, 1.0) if is_merge  else ((0.4, 0.4, 0.4) if is_fix else (0.8, 0.8, 0.8))
         self.pos = pos
 
 class Canva:
@@ -102,10 +102,7 @@ class Canva:
         cell.pos = i
         self.vertex_num += 1
         self.setCellPosition(cell)
-
-        color = cell.color
-        offset = i*8*3
-        self.vertices_color[offset:offset+24] = color*8
+        self.setCellColor(cell)
     
     def updateVertexBuffer(self):
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_vertices)
@@ -152,6 +149,12 @@ class Canva:
             x, y, 0.0
         ]
 
+    def setCellColor(self, cell: Cell):
+        i = cell.pos
+        color = cell.color
+        offset = i*8*3
+        self.vertices_color[offset:offset+24] = color*8
+
     def draw(self):
         glClear(GL_COLOR_BUFFER_BIT)
 
@@ -182,7 +185,7 @@ class OptimizeStep:
     original_insert_x: float
     original_insert_y: float
     added_cell: Cell
-    moved_cells: tuple[str, tuple[float, float]]     
+    moved_cells: list[tuple[str, tuple[float, float]]] 
 
 @dataclass
 class Board:
@@ -200,6 +203,9 @@ class Board:
         self.cells = {}
         self.cells_mapping = SortedDict()
         self.display = display
+
+        self.illegal_cells = []
+        self.prev_moved_cells: list[Cell] = []
 
     def parser(self, lg_filename: str):
         with open(lg_filename, "r") as input:
@@ -222,6 +228,12 @@ class Board:
             self.canva.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
         self.canva.updateAllBuffer()
+
+    def isOverlap(self, cell1: Cell, cell2: Cell):
+        return cell1.x < cell2.x + cell2.width and\
+               cell1.x + cell1.width > cell2.x and\
+               cell1.y < cell2.y + cell2.height and\
+               cell1.y + cell1.height > cell2.y
 
     # step for opt
     def step(self, optimzieStep: OptimizeStep):
@@ -251,15 +263,84 @@ class Board:
             self.canva.setCellPosition(cell)
 
         self.canva.updateAllBuffer()
+        return True
+
+    # step for opt in detail
+    def detailStep(self, optimizeStep: OptimizeStep):
+        if len(self.illegal_cells) == 0:
+            for cell in self.prev_moved_cells:
+                cell.color = (0.0, 0.0, 1.0) if cell.is_merge else (0.8, 0.8, 0.8)
+                self.canva.setCellColor(cell)
+            self.prev_moved_cells = []
+
+            # remove merged cell
+            for cell_name in optimizeStep.removed_cells:
+                # get last cell
+                last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
+                current_cell = self.cells[cell_name]
+                # remove current cell by swap back to current and remove back
+                self.canva.swapCell(last_cell_idx, current_cell.pos)
+                self.canva.popCell()
+                self.cells_mapping[current_cell.pos] = last_cell_name
+                self.cells[last_cell_name].pos = current_cell.pos
+
+                del self.cells_mapping[last_cell_idx]
+                del self.cells[cell_name]
+
+            self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
+            self.canva.pushCell(optimizeStep.added_cell)
+            idx = optimizeStep.added_cell.pos
+            self.cells_mapping[idx] = optimizeStep.added_cell.name
+            self.cells[optimizeStep.added_cell.name].pos = idx
+
+            moved_cell = self.cells[optimizeStep.added_cell.name]
+            move_to = moved_cell.x, moved_cell.y
+        else:
+            moved_cell_name, move_to = self.illegal_cells.pop()
+            moved_cell = self.cells[moved_cell_name]
+
+        # move cell
+        moved_cell.x = move_to[0]
+        moved_cell.y = move_to[1]
+        moved_cell.color = (0.0, 0.0, 1.0) if moved_cell.is_merge else (0.0, 1.0, 0.0)
+        self.prev_moved_cells.append(moved_cell)
+        self.canva.setCellColor(moved_cell)
+        self.canva.setCellPosition(moved_cell)
+        
+        # mark all cell if overlap with current cell
+        i = 0
+        while i < len(optimizeStep.moved_cells):
+            cell_name, _ = optimizeStep.moved_cells[i]
+            cell = self.cells[cell_name]
+            if self.isOverlap(cell, moved_cell):
+                cell.color = (1.0, 0.0, 0.0)
+                self.canva.setCellColor(cell)
+                # swap and pop back
+                optimizeStep.moved_cells[i], optimizeStep.moved_cells[-1] = optimizeStep.moved_cells[-1], optimizeStep.moved_cells[i]
+                self.illegal_cells.append(optimizeStep.moved_cells.pop())
+            else:
+                i += 1
+
+        if len(self.illegal_cells) == 0:    
+            for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
+                cell = self.cells[cell_name]
+                cell.x = cell_x
+                cell.y = cell_y
+                self.canva.setCellPosition(cell)
+
+        self.canva.updateAllBuffer()
+        return len(self.illegal_cells) == 0
 
 class Visualizer:
-    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool, args):
+    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool, detail: bool, args):
         self.start_time = time.time()
         self.board = Board(display)
         self.board.parser(lg_file)
 
         self.optimize_cases: list[OptimizeStep] = []
         self.optimizeStepInit(opt_file, post_file)
+
+        self.detail = detail
 
         self.video_out = False
         if output_file:
@@ -278,7 +359,7 @@ class Visualizer:
         if not self.display:
             glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.canva.fbo)
 
-        self.n_step = -1
+        self.n_step = 0
 
         # draw first frame
         if self.display:
@@ -335,13 +416,16 @@ class Visualizer:
         if self.video_out:
             self.captureFrame()
 
-        # move to next step
-        self.n_step += 1
-        if self.n_step == len(self.optimize_cases):
-            self.terminate()
-            return True
-
-        self.board.step(self.optimize_cases[self.n_step])
+        if self.detail:
+            finish = self.board.detailStep(self.optimize_cases[self.n_step])
+        else:
+            finish = self.board.step(self.optimize_cases[self.n_step])
+        if finish:
+            # move to next cases
+            self.n_step += 1
+            if self.n_step == len(self.optimize_cases):
+                self.terminate()
+                return True
 
         if self.display:
             self.board.canva.display()
@@ -361,8 +445,9 @@ if __name__ == '__main__':
     parser.add_argument('-lg',     type=str, required=True, help="lg file")
     parser.add_argument('-opt',    type=str, required=True, help="opt file")
     parser.add_argument('-postlg', type=str, required=True, help="post file")
-    parser.add_argument('-o',      type=str, help="output mp4 file")
+    parser.add_argument('-o', type=str, help="output file")
     parser.add_argument('-display', action='store_true', help="render screen")
+    parser.add_argument('-detail', action='store_true', help="show process of every cell in legalization")
     # ffmpeg format
     parser.add_argument('-pix_fmt', type=str, default='yuv444p', help="ffmpeg option, pixel format")
     parser.add_argument('-framerate', type=int, default=60, help="ffmpeg option, fps")
@@ -380,9 +465,10 @@ if __name__ == '__main__':
     opt_file = args.opt
     post_file = args.postlg
     output_file = args.o
+    detail = args.detail
 
     display = True if args.display else False
-    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display, args)
+    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display, detail, args)
 
     if display:
         while not glfw.window_should_close(visualizer.board.canva.window):
