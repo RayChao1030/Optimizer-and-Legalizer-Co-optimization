@@ -12,6 +12,13 @@ from OpenGL.GLU import *
 RESOLUTION = [1920, 1080]
 BUFFER_SIZE = -1
 
+MERGE_COLOR = (0.0, 0.0, 1.0)
+ACTIVE_MERGE_COLOR = (0.0, 1.0, 1.0)
+NOTFIX_COLOR = (0.4, 0.4, 0.4)
+FIX_COLOR = (0.8, 0.8, 0.8)
+LEGAL_COLOR = (0.0, 1.0, 0.0)
+ILLEGAL_COLOR = (1.0, 0.0, 0.0)
+
 @dataclass(init=False)
 class Cell:
     name: str
@@ -33,7 +40,7 @@ class Cell:
         self.height = height
         self.is_fix = is_fix
         self.is_merge = is_merge
-        self.color = (0.0, 0.0, 1.0) if is_merge  else ((0.4, 0.4, 0.4) if is_fix else (0.8, 0.8, 0.8))
+        self.color = MERGE_COLOR if is_merge else (NOTFIX_COLOR if is_fix else FIX_COLOR)
         self.pos = pos
 
 class Canva:
@@ -47,6 +54,9 @@ class Canva:
         self.vertices = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
         self.vertices_color = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
         self.vertex_num = 0
+        self.merge_cell_init = False
+        self.merge_cell_vertices = np.empty((4*3,), dtype=np.float32)
+        self.merge_cell_vertices_color = np.array(ACTIVE_MERGE_COLOR*4, dtype=np.float32)
 
         self.initOpenGL(display)
 
@@ -56,6 +66,7 @@ class Canva:
             raise RuntimeError("Failed to initialize GLFW")
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 1)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 2)
+        glfw.window_hint(glfw.DEPTH_BITS, 24); 
 
         if not display:
             glfw.window_hint(glfw.VISIBLE, glfw.FALSE)     
@@ -69,6 +80,11 @@ class Canva:
 
         glViewport(0, 0, *RESOLUTION)
 
+        # also render if on depth clip range border
+        # that is, render [zNear, zFar], not [zNear, zFar)
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LEQUAL) 
+        
         # off screen rendering
         # https://stackoverflow.com/questions/12157646/how-to-render-offscreen-on-opengl
         if not display:
@@ -77,14 +93,25 @@ class Canva:
             glBindRenderbuffer(GL_RENDERBUFFER, self.rbo)
             glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, *RESOLUTION)
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, self.fbo)
+            backingWidth = glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH)
+            backingHeight = glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT)
             glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.rbo)
+            # bind depth buffer
+            # https://stackoverflow.com/questions/4378182/whats-wrong-with-using-depth-render-buffer-opengl-es-2-0
+            self.depth_buffer = glGenRenderbuffers(1)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.depth_buffer)
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, backingWidth, backingHeight)
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, self.depth_buffer)
 
         glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
 
         # Set up the orthogonal projection to fit the rectangles in the window
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(self.x0, self.x1, self.y0, self.y1, -1, 1)  # Adjust for your data bounds
+        # zNear, zFar is respect to camera at (0,0,0) looking at -z axis, 
+        # zNear=1 means the nearest coordinate camera can see is 1 in front of camera, that is, -1
+        # zFar=-1 means the farest coordinate camera can see is -1 in front of camera, that is, 1
+        glOrtho(self.x0, self.x1, self.y0, self.y1, 1.0, -1.0)
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
@@ -92,16 +119,30 @@ class Canva:
         self.vbo_vertices = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_vertices)
         glBufferData(GL_ARRAY_BUFFER, self.vertices.nbytes, self.vertices, GL_STATIC_DRAW)
-
         self.vbo_colors = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_colors)
         glBufferData(GL_ARRAY_BUFFER, self.vertices_color.nbytes, self.vertices_color , GL_STATIC_DRAW)
+
+        # Create VBOs for merge cell vertices and colors
+        self.vbo_merge_cell_vertices = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_vertices)
+        glBufferData(GL_ARRAY_BUFFER, self.merge_cell_vertices.nbytes, self.merge_cell_vertices, GL_STATIC_DRAW)
+        self.vbo_merge_cell_colors = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
+        glBufferData(GL_ARRAY_BUFFER, self.merge_cell_vertices_color.nbytes, self.merge_cell_vertices_color , GL_STATIC_DRAW)
+        # merge cell color not change, update directly
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, self.merge_cell_vertices_color.nbytes, self.merge_cell_vertices_color)
 
     def pushCell(self, cell: Cell):
         i = self.vertex_num
         cell.pos = i
         self.vertex_num += 1
-        self.setCellPosition(cell)
+        if cell.is_merge:
+            z = -1.0
+        else:
+            z = 1.0
+        self.setCellPosition(cell, z)
         self.setCellColor(cell)
     
     def updateVertexBuffer(self):
@@ -130,7 +171,7 @@ class Canva:
         self.vertices[i:i+24], self.vertices[j:j+24] = self.vertices[j:j+24].copy(), self.vertices[i:i+24].copy()
         self.vertices_color[i:i+24], self.vertices_color[j:j+24] = self.vertices_color[j:j+24].copy(), self.vertices_color[i:i+24].copy()
 
-    def setCellPosition(self, cell: Cell):
+    def setCellPosition(self, cell: Cell, z = 1.):
         i = cell.pos
         #assert i >= 0 and i < self.vertex_num
         x = cell.x
@@ -139,15 +180,31 @@ class Canva:
         height = cell.height
         offset = i*8*3
         self.vertices[offset:offset + 24] = [
-            x, y, 0.0,
-            x + width, y, 0.0,
-            x + width, y, 0.0,
-            x + width, y + height, 0.0,
-            x + width, y + height, 0.0,
-            x, y + height, 0.0,
-            x, y + height, 0.0,
-            x, y, 0.0
+            x, y, z,
+            x + width, y, z,
+            x + width, y, z,
+            x + width, y + height, z,
+            x + width, y + height, z,
+            x, y + height, z,
+            x, y + height, z,
+            x, y, z
         ]
+
+    def setMergeCell(self, cell: Cell):
+        x = cell.x
+        y = cell.y
+        w = cell.width
+        h = cell.height
+        self.merge_cell_init = True
+        self.merge_cell_vertices[:] = [
+            x, y, 0.0,
+            x + w, y, 0.0,
+            x, y + h, 0.0,
+            x + w, y + h, 0.0,
+        ]
+        # Update the VBO with new vertices
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_vertices)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, self.merge_cell_vertices.nbytes, self.merge_cell_vertices)
 
     def setCellColor(self, cell: Cell):
         i = cell.pos
@@ -156,7 +213,7 @@ class Canva:
         self.vertices_color[offset:offset+24] = color*8
 
     def draw(self):
-        glClear(GL_COLOR_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glEnableClientState(GL_VERTEX_ARRAY)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_vertices)
@@ -168,6 +225,16 @@ class Canva:
 
         # Draw all rectangles with a single draw call
         glDrawArrays(GL_LINES, 0, self.vertex_num * 8)  # Each rectangle has 8 vertices (lines)
+
+        if self.merge_cell_init:
+            glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_vertices)
+            glVertexPointer(3, GL_FLOAT, 0, None)  # Set vertex pointer
+
+            glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
+            glColorPointer(3, GL_FLOAT, 0, None)  # Set color pointer
+
+            # Draw all rectangles with a single draw call
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)  # Each rectangle has 4 vertices
 
         glDisableClientState(GL_VERTEX_ARRAY)
         glDisableClientState(GL_COLOR_ARRAY)
@@ -207,6 +274,9 @@ class Board:
         self.illegal_cells = []
         self.prev_moved_cells: list[Cell] = []
 
+        self.contain_merge_cell = False
+        self.prev_merge_cell: Cell = None
+
     def parser(self, lg_filename: str):
         with open(lg_filename, "r") as input:
             lg_lines = input.readlines()
@@ -236,8 +306,15 @@ class Board:
                cell1.y + cell1.height > cell2.y
 
     # step for opt
-    def step(self, optimzieStep: OptimizeStep):
-        for cell_name in optimzieStep.removed_cells:
+    def step(self, optimizeStep: OptimizeStep):
+        self.contain_merge_cell = True
+        if self.prev_merge_cell is not None:
+            self.canva.pushCell(self.prev_merge_cell)
+            idx = self.prev_merge_cell.pos
+            self.cells_mapping[idx] = self.prev_merge_cell.name
+            self.cells[self.prev_merge_cell.name].pos = idx
+
+        for cell_name in optimizeStep.removed_cells:
             # get last cell
             last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
             current_cell = self.cells[cell_name]
@@ -250,13 +327,11 @@ class Board:
             del self.cells_mapping[last_cell_idx]
             del self.cells[cell_name]
 
-        self.cells[optimzieStep.added_cell.name] = optimzieStep.added_cell
-        self.canva.pushCell(optimzieStep.added_cell)
-        idx = optimzieStep.added_cell.pos
-        self.cells_mapping[idx] = optimzieStep.added_cell.name
-        self.cells[optimzieStep.added_cell.name].pos = idx
+        self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
+        self.canva.setMergeCell(optimizeStep.added_cell)
+        self.prev_merge_cell = optimizeStep.added_cell
 
-        for cell_name, (cell_x, cell_y) in optimzieStep.moved_cells:
+        for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
             cell = self.cells[cell_name]
             cell.x = cell_x
             cell.y = cell_y
@@ -267,10 +342,21 @@ class Board:
 
     # step for opt in detail
     def detailStep(self, optimizeStep: OptimizeStep):
+        self.contain_merge_cell = True
         if len(self.illegal_cells) == 0:
+            if self.prev_merge_cell is not None:
+                self.canva.pushCell(self.prev_merge_cell)
+                idx = self.prev_merge_cell.pos
+                self.cells_mapping[idx] = self.prev_merge_cell.name
+                self.cells[self.prev_merge_cell.name].pos = idx
             for cell in self.prev_moved_cells:
-                cell.color = (0.0, 0.0, 1.0) if cell.is_merge else (0.8, 0.8, 0.8)
+                cell.color = MERGE_COLOR if cell.is_merge else FIX_COLOR
                 self.canva.setCellColor(cell)
+                if cell.is_merge:
+                    z = -1
+                else:
+                    z = 1
+                self.canva.setCellPosition(cell, z) # use to reset z
             self.prev_moved_cells = []
 
             # remove merged cell
@@ -288,10 +374,8 @@ class Board:
                 del self.cells[cell_name]
 
             self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
-            self.canva.pushCell(optimizeStep.added_cell)
-            idx = optimizeStep.added_cell.pos
-            self.cells_mapping[idx] = optimizeStep.added_cell.name
-            self.cells[optimizeStep.added_cell.name].pos = idx
+            self.prev_merge_cell = optimizeStep.added_cell
+            self.canva.setMergeCell(optimizeStep.added_cell)
 
             moved_cell = self.cells[optimizeStep.added_cell.name]
             move_to = moved_cell.x, moved_cell.y
@@ -299,13 +383,13 @@ class Board:
             moved_cell_name, move_to = self.illegal_cells.pop()
             moved_cell = self.cells[moved_cell_name]
 
-        # move cell
-        moved_cell.x = move_to[0]
-        moved_cell.y = move_to[1]
-        moved_cell.color = (0.0, 0.0, 1.0) if moved_cell.is_merge else (0.0, 1.0, 0.0)
-        self.prev_moved_cells.append(moved_cell)
-        self.canva.setCellColor(moved_cell)
-        self.canva.setCellPosition(moved_cell)
+            # move cell
+            moved_cell.x = move_to[0]
+            moved_cell.y = move_to[1]
+            moved_cell.color = LEGAL_COLOR
+            self.prev_moved_cells.append(moved_cell)
+            self.canva.setCellColor(moved_cell)
+            self.canva.setCellPosition(moved_cell, -1.0)
         
         # mark all cell if overlap with current cell
         i = 0
@@ -313,8 +397,9 @@ class Board:
             cell_name, _ = optimizeStep.moved_cells[i]
             cell = self.cells[cell_name]
             if self.isOverlap(cell, moved_cell):
-                cell.color = (1.0, 0.0, 0.0)
+                cell.color = ILLEGAL_COLOR
                 self.canva.setCellColor(cell)
+                self.canva.setCellPosition(cell, -0.7) # use to change z
                 # swap and pop back
                 optimizeStep.moved_cells[i], optimizeStep.moved_cells[-1] = optimizeStep.moved_cells[-1], optimizeStep.moved_cells[i]
                 self.illegal_cells.append(optimizeStep.moved_cells.pop())
@@ -326,7 +411,11 @@ class Board:
                 cell = self.cells[cell_name]
                 cell.x = cell_x
                 cell.y = cell_y
-                self.canva.setCellPosition(cell)
+                cell.color = LEGAL_COLOR
+                self.canva.setCellPosition(cell, -0.7)
+                self.canva.setCellColor(cell)
+                self.prev_moved_cells.append(cell)
+
 
         self.canva.updateAllBuffer()
         return len(self.illegal_cells) == 0
