@@ -1,5 +1,3 @@
-# 忽略 myenv 資料夾
+# 忽略資料夾
 /myenv/
-/.vscode/
-/tc/*.grid
-/tc/*.util
+.vscode/

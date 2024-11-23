@@ -23,10 +23,7 @@
 ├── 7000
 ├── README.md
 ├── UTIL_RATE.py
-├── _draw_utilization_rate.py
-├── _util.py
 ├── tc
-└── myenv  # Python 虛擬環境
 
 ```
 
@@ -48,19 +45,17 @@ pip install matplotlib    # 安裝必要套件
 
 ## 3. 執行程式
 ```bash
-python UTIL_RATE.py 16900 # 測試 testcase 16900 
-python UTIL_RATE.py 5000 # 測試 testcase 5000 
-python UTIL_RATE.py 100 # 測試 testcase 100 
-python UTIL_RATE.py 7000 # 測試 testcase 7000 
+python UTIL_RATE.py *.lg *.opt *_post.lg <output_dir> <xStepNum> <yStepNum>
+python UTIL_RATE.py *.lg *.opt *_post.lg ./output 10 20 # Util Rate 圖片存放於 ./output, x軸切為 10 等分, y軸切為 20 等分
 ```
 
 ## 4. 輸出結果
 ```bash
-testcase2_100_*.png # *為流水號，每 1000次 baking 輸出一張圖
+*_{流水號}.png # *為流水號，從 0 開始，每 1000次 baking 輸出一張圖
 ```
 
 ## 5. 圖例
-- XY 軸：將 placement row region 切為 10*10 個 grid
+- XY 軸：將 placement row region 切為 xStepNum * yStepNum 個 grid
 - 深淺： 面積使用率
 
 ## 6. 其他

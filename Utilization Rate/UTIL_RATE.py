@@ -5,44 +5,35 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 #import cv2
+import argparse
 from matplotlib.colors import LinearSegmentedColormap
 
-argv = 5000
-# 檢查是否有提供足夠的參數
-if len(sys.argv) < 2:
-    print("請提供一個整數作為參數")
+xStepNum = 10.0
+yStepNum = 10.0
+
+if len(sys.argv) < 4:
+    print("請輸入三個整數")
     sys.exit(1)
 
-# 取得命令列參數
 try:
-    argv = int(sys.argv[1])  # 將參數轉換為整數
-    #print(f"取得的整數是: {number}")
+    lgfile = sys.argv[1] 
+    optfile = sys.argv[2]
+    postfile = sys.argv[3]
+    utilGraphDir = sys.argv[4]
+    xStepNum = int(sys.argv[5])  # f
+    yStepNum = int(sys.argv[6])  # f
 except ValueError:
-    print("提供的參數不是有效的整數")
+    print("invalid parameters")
     sys.exit(1)
 
-print("argv = ", argv)
-#print(argv)
-index = 1
+print("xStepNum = ", xStepNum)
+print("yStepNum = ", yStepNum)
 
-if argv == 5000: 
-    index = 1
-elif argv == 16900:
-    index = 0
-elif argv == 100:
-    index = 2
-elif argv == 7000:
-    index = 3
-else:
-    print("請提供有效的參數")
 
-print("index = ", index)
-
-filename = ["./tc/testcase1_16900", "./tc/testcase1_ALL0_5000", "./tc/testcase2_100", "./tc/testcase1_MBFF_LIB_7000"]
-
-colors = [(1, 1, 1), (0.7, 0.7, 0.7), (0.5, 0.5, 0.5), (0.3, 0.3, 0.3), (0, 0, 0)]
-positions = [0.0, 0.5, 0.7, 0.85, 1.0]  # 對應區間：平緩(0.0-0.5)、次陡降(0.5-0.7)、陡降(0.7-1.0)
+colors = [(1, 1, 1), (0.7, 0.7, 0.7), (0.3, 0.3, 0.3)]  # 保留平緩和次陡降
+positions = [0.0, 0.5, 1.0]  # 新的區間：平緩(0.0-0.5)、次陡降(0.5-1.0)
 custom_cmap = LinearSegmentedColormap.from_list("custom_greys", list(zip(positions, colors)))
+stepCut = 1000 # 每隔 1000 次 opt 輸出 util rate graph
 
 # Component class to hold information about each component
 class Component:
@@ -152,71 +143,7 @@ def read_lg_file(file_path: str):
             components.append(Component(name, int(x), int(y), int(w), int(h), is_fixed))
 
     # Calculate and print the bounding box of the placement rows
-    '''
-    if placement_rows:
-        min_x = min(row.x for row in placement_rows)
-        min_y = min(row.y for row in placement_rows)
-        max_x = max(row.x + row.site_width * row.num_sites for row in placement_rows)
-        max_y = placement_rows[-1].y + placement_rows[-1].site_height
-
-        # Split the bounding box into 10x10 grid and write to file
-        grid_points = []
-        x_step = (max_x - min_x) / 10.0
-        y_step = (max_y - min_y) / 10.0
-        for j in range(10):  # Iterate from bottom to top for y
-            for i in range(10):  # Iterate from left to right for x
-                grid_points.append((min_x + i * x_step, min_y + j * y_step))
-
-        with open(filename[index] + ".grid", "w") as grid_file:
-            for point in grid_points:
-                grid_file.write(f"{point[0]} {point[1]}\n")
-
-    # Calculate area utilization of components within the 10x10 grid
-    grid_utilization = [[0.0 for _ in range(10)] for _ in range(10)]
-    grid_area = x_step * y_step
-    for component in components:
-        for j in range(10):  # Iterate from bottom to top for y
-            for i in range(10):  # Iterate from left to right for x
-                grid_min_x = min_x + i * x_step
-                grid_max_x = grid_min_x + x_step
-                grid_min_y = min_y + j * y_step
-                grid_max_y = grid_min_y + y_step
-
-                # Calculate overlap area between component and current grid cell
-                overlap_min_x = max(component.x, grid_min_x)
-                overlap_max_x = min(component.x + component.w, grid_max_x)
-                overlap_min_y = max(component.y, grid_min_y)
-                overlap_max_y = min(component.y + component.h, grid_max_y)
-
-                if overlap_min_x <= overlap_max_x and overlap_min_y <= overlap_max_y:
-                    overlap_area = (overlap_max_x - overlap_min_x) * (overlap_max_y - overlap_min_y)
-                    grid_utilization[j][i] += overlap_area / grid_area
-
-    # Write grid utilization to file
-    with open(filename[index] + ".util", "w") as util_file:
-        for row in grid_utilization[::-1]:  # Reverse rows to write from bottom to top
-            util_file.write(" ".join(map(str, row)) + "\n")
-
-
-    # Create a heatmap using matplotlib
-    plt.figure(figsize=(8, 6))
-    utilization_array = np.array(grid_utilization)
-    plt.imshow(utilization_array, cmap=custom_cmap, interpolation="nearest", origin="lower", vmin=0, vmax=1)
-    plt.colorbar(label="Utilization")
-    plt.title("Grid Utilization Heatmap")
-    plt.xlabel("Grid X Index")
-    plt.ylabel("Grid Y Index")
-    plt.xticks(np.arange(10))
-    plt.yticks(np.arange(10))
-
-    for j in range(10):
-            for i in range(10):
-                plt.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
-
-
-    plt.savefig(filename[index] + ".png")
-    plt.close()
-    '''
+    
 
 # Function to read and parse the opt file
 def read_opt_file(file_path: str):
@@ -294,9 +221,9 @@ def read_post_file(file_path: str, banking_cells: List[BankingCell]):
 
 # Example usage if testcase1_ALL0_5000.lg, testcase1_ALL0_5000.opt, and testcase1_ALL0_5000_post.lg are in the current directory
 
-read_lg_file(filename[index] + ".lg")
-banking_cells = read_opt_file(filename[index] + ".opt")
-read_post_file(filename[index] + "_post.lg", banking_cells)
+read_lg_file(lgfile)
+banking_cells = read_opt_file(optfile)
+read_post_file(postfile, banking_cells)
 
 
 for k, cell in enumerate(banking_cells):
@@ -329,27 +256,27 @@ for k, cell in enumerate(banking_cells):
     max_y = placement_rows[-1].y + placement_rows[-1].site_height
     #print(f"Bounding box: ({min_x}, {min_y}), ({max_x}, {max_y})")
 
-    x_step = (max_x - min_x) / 10.0
-    y_step = (max_y - min_y) / 10.0
+    x_step = (max_x - min_x) / xStepNum
+    y_step = (max_y - min_y) / yStepNum
     #print(f"Grid division: x_step={x_step}, y_step={y_step}")
 
     total_width = max_x - min_x
     total_height = max_y - min_y
-    if not np.isclose(total_width, x_step * 10) or not np.isclose(total_height, y_step * 10):
+    if not np.isclose(total_width, x_step * xStepNum) or not np.isclose(total_height, y_step * yStepNum):
         print(f"Grid division mismatch: total_width={total_width}, total_height={total_height}")
 
         
-    if(k%1000 == 0 or k == len(banking_cells) - 1):
+    if(k%stepCut == 0 or k == len(banking_cells) - 1):
         # 初始化 grid utilization
-        grid_utilization = [[0.0 for _ in range(10)] for _ in range(10)]
+        grid_utilization = [[0.0 for _ in range(xStepNum)] for _ in range(yStepNum)]
         grid_area = x_step * y_step
 
         for component in components:
             if component.x + component.w > max_x or component.y + component.h > max_y:
                 print(f"Component {component.name} exceeds bounds: x+w={component.x + component.w}, y+h={component.y + component.h}")
 
-            for j in range(10):
-                for i in range(10):
+            for j in range(yStepNum):
+                for i in range(xStepNum):
                     grid_min_x = min_x + i * x_step
                     grid_max_x = grid_min_x + x_step
                     grid_min_y = min_y + j * y_step
@@ -375,15 +302,17 @@ for k, cell in enumerate(banking_cells):
         fig.colorbar(cax, ax=ax, label="Utilization")
 
         # 加入每格的數值標籤
-        for j in range(10):
-            for i in range(10):
+        for j in range(yStepNum):
+            for i in range(xStepNum):
                 ax.text(i, j, f"{utilization_array[j, i] * 100:.0f}", ha='center', va='center', color='black')
 
-        # 儲存圖片，檔名包含流水號（從1開始）
-        base = os.path.basename(filename[index])  # 獲取檔名
-        
-        argvstr = str(argv)
-        fn = f"./{argvstr}/{base}_{k//1000}.png"  # 使用整數除法
+        # 儲存圖片，檔名包含流水號（從0開始）
+        if not os.path.exists(utilGraphDir):
+            os.makedirs(utilGraphDir)  # 創建目錄
+
+        file_prefix = os.path.splitext(os.path.basename(lgfile))[0]
+        serial_number = k // stepCut
+        fn = os.path.join(utilGraphDir, f"{file_prefix}_{serial_number}.png")
 
         fig.savefig(fn, dpi=300)
 
