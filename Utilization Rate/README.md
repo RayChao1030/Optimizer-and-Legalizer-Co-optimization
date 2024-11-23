@@ -47,19 +47,19 @@ pip install matplotlib    # 安裝必要套件
 ```bash
 python UTIL_RATE.py *.lg *.opt *_post.lg <output_dir> <xStepNum> <yStepNum> <stepCut>
 python UTIL_RATE.py *.lg *.opt *_post.lg ./output 10 20 1000
-# Util Rate 圖片存放於 ./output, x 軸切為 10 等分, y 軸切為 20 等分，每 1000次 opt繪製圖片
+# Util Rate 圖片存放於 ./output, x 軸切為 10 等分, y 軸切為 20 等分，每 1000次 opt 繪製圖片與gif
 #
-python UTIL_RATE.py ./tc/testcase1_ALL0_5000.lg ./tc/testcase1_ALL0_5000.opt ./tc/testcase1_ALL0_5000_post.lg ./5000 16 16 1000
-python UTIL_RATE.py ./tc/testcase1_16900.lg ./tc/testcase1_16900.opt ./tc/testcase1_16900_post.lg ./16900 10 10 500
-python UTIL_RATE.py ./tc/testcase1_MBFF_LIB_7000.lg ./tc/testcase1_MBFF_LIB_7000.opt ./tc/testcase1_MBFF_LIB_7000_post.lg ./7000 20 20 1000
-python UTIL_RATE.py ./tc/testcase2_100.lg ./tc/testcase2_100.opt ./tc/testcase2_100_post.lg ./100 20 20 500
+python UTIL_RATE.py ./tc/testcase1_ALL0_5000.lg ./tc/testcase1_ALL0_5000.opt ./tc/testcase1_ALL0_5000_post.lg ./5000 16 16 100 # 約執行 25 秒
+python UTIL_RATE.py ./tc/testcase1_16900.lg ./tc/testcase1_16900.opt ./tc/testcase1_16900_post.lg ./16900 10 10 50 # 約執行 25 秒
+python UTIL_RATE.py ./tc/testcase1_MBFF_LIB_7000.lg ./tc/testcase1_MBFF_LIB_7000.opt ./tc/testcase1_MBFF_LIB_7000_post.lg ./7000 20 20 400 # 約執行 35 秒
+python UTIL_RATE.py ./tc/testcase2_100.lg ./tc/testcase2_100.opt ./tc/testcase2_100_post.lg ./100 20 20 100 # 約執行 25 秒
 ```
 
 ## 4. 輸出結果
 在目錄 output_dir 底下，輸出圖片與 gif
 ```bash
 *_{流水號}.png # *為流水號，從 0 開始，每 1000次 baking 輸出一張圖
-output.gif
+./output_dir/output.gif # 動畫 gif 顯示 util rate 變化
 ```
 
 ## 5. 圖例
