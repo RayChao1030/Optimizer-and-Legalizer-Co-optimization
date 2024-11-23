@@ -9,17 +9,18 @@ A Visualizer to visualize the steps in a legalizer.
 ## Demo
 - **Normal Mode**
 
-  https://github.com/user-attachments/assets/bdf9799d-084a-4722-a268-fac7b6eb816a
+  https://github.com/user-attachments/assets/8ce3b3be-8d17-4f6f-9762-ed8ba8206fdc
 
-  https://github.com/user-attachments/assets/b77ab2b7-e78b-4323-8ed5-834f262250c1
+  https://github.com/user-attachments/assets/f6263b54-0a42-4c62-b433-9071680163af
 
 - **Detail Mode**  (the video is long because fps set to 2 for better visual effect)
 
-  https://github.com/user-attachments/assets/f715e18a-6f1d-4300-b837-0421d74e09d4
+  https://github.com/user-attachments/assets/80490972-3fd6-4274-8ba7-91714f4016fd
 
-  https://github.com/user-attachments/assets/d8db99d1-269c-498c-be63-1896aa8b3cb0
+  https://github.com/user-attachments/assets/086032d1-09c7-4a3b-9c2c-7b5d4ee4864c
 
 ## Requirements
+
 - **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
 - The environment can be set up using the `environment.yml` file.
 
