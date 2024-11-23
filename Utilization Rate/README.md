@@ -63,6 +63,11 @@ testcase2_100_*.png # *為流水號，每 1000次 baking 輸出一張圖
 - XY 軸：將 placement row region 切為 10*10 個 grid
 - 深淺： 面積使用率
 
+## 6. 其他
+每隔 1000 次 opt，根據 *.opt, *_post.lg , 畫出當前 placement region 使用率
 
+目前未優化，暴力計算方式稍微耗時。尚未串接成影片
+
+mac 環境下實作測試，windows 尚未測試
 
 
