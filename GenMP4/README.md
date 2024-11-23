@@ -9,23 +9,11 @@ To run the visualizer, use the following command:
 ```bash
 $ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
 ```
-Alternatively, you can run the executable file:
-```bash
-$ visualizer.exe -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
-```
-> [!WARNING]
-> Currently, since the packed version using `PyInstaller` may not produce correct results, the exe file is an older version, which is slower. The performance gap is significant between the exe file (~40 step per second) and the Python script (~130 step per second). It is strongly recommended to use the Python script. 
 
 - `-display`: Enables rendering the frames on the screen. If not set, the rendering process will be faster.
 
 
 - The visualizer will generate a 60 FPS MP4 video, where each step is displayed for 1 frame (1/60 s).
-
-> [!NOTE]
-> - The `.exe` file is packaged with `pyinstaller` using the command:
-> ```
-> $ pyinstaller --onefile --name visualizer main.py
-> ```
 
 
 ## Result
