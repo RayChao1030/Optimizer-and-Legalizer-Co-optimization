@@ -9,11 +9,15 @@ A Visualizer to visualize the steps in a legalizer.
 ## Demo
 - **Normal Mode**
 
-[Video Placeholder]
+  https://github.com/user-attachments/assets/bdf9799d-084a-4722-a268-fac7b6eb816a
 
-- **Detail Mode**  (fps set to 2 for better visual effect)
+  https://github.com/user-attachments/assets/b77ab2b7-e78b-4323-8ed5-834f262250c1
 
-[Video Placeholder]
+- **Detail Mode**  (the video is long because fps set to 2 for better visual effect)
+
+  https://github.com/user-attachments/assets/f715e18a-6f1d-4300-b837-0421d74e09d4
+
+  https://github.com/user-attachments/assets/d8db99d1-269c-498c-be63-1896aa8b3cb0
 
 ## Requirements
 - **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
