@@ -1,13 +1,23 @@
 # Fast Optimization Visualizer
 
-## demo
+## Introduction
+A Visualizer to visualize the steps in a legalizer.  
+- The Visualizer supports two modes:
+  - **Normal Mode** (default): Provides a quick overview of the legalization process. All cells moved in a step are visualized together in a single frame.
+  - **Detail Mode**: Offers an in-depth view of how each cell is legalized. This mode highlights individual cell movements (e.g., how overlapping cells are pushed) while grayscaling all unrelated cells, allowing users to focus on the cells being moved in the current step.
+
+## Demo
 - **Normal Mode**
 
-[Video Placeholder]
+  https://github.com/user-attachments/assets/bdf9799d-084a-4722-a268-fac7b6eb816a
 
-- **Detail Mode**  (fps set to 2 for better visual effect)
+  https://github.com/user-attachments/assets/b77ab2b7-e78b-4323-8ed5-834f262250c1
 
-[Video Placeholder]
+- **Detail Mode**  (the video is long because fps set to 2 for better visual effect)
+
+  https://github.com/user-attachments/assets/f715e18a-6f1d-4300-b837-0421d74e09d4
+
+  https://github.com/user-attachments/assets/d8db99d1-269c-498c-be63-1896aa8b3cb0
 
 ## Requirements
 - **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
@@ -18,6 +28,9 @@ To run the visualizer, use the following command:
 ```bash
 $ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display] [-detail] [-vcodec VCODEC] [-preset PRESET] [-crf CRF] [-pix_fmt PIX_FMT] [-framerate FPS]
 ```
+- There are two mode in this Visualizer:
+  - Normal(default): For quick outline the legalize process, all cell moved in that step will move together in a frame
+  - Detail: For realize how cell legalized (how to push other cells and how cells move), all color except cells related to current step is in grayscale to allow user can focus on cells moved in current step.  
 
 ## Arguments
 - Input Files:
