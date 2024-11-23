@@ -1,4 +1,4 @@
-# Placement Row Grid Usage and Visualization
+# Placement Row Grid Usage and Visualization(GIF)
 
 ## 簡介
 視覺化 MBFF 優化過程中面積使用率的變化
