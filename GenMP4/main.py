@@ -1,8 +1,7 @@
-import numpy as np
 import argparse
 from dataclasses import dataclass
-from sortedcontainers import SortedDict
 import time
+from sortedcontainers import SortedDict
 import glfw
 import ffmpeg
 import numpy as np
@@ -10,8 +9,6 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 RESOLUTION = [1920, 1080]
-BUFFER_SIZE = -1
-
 
 MERGE_COLOR = (0.0, 0.0, 1.0)
 ACTIVE_MERGE_COLOR = (0.0, 1.0, 1.0)
@@ -24,20 +21,9 @@ ILLEGAL_COLOR = (1.0, 0.0, 0.0)
 DETAIL_NOTFIX_COLOR = (0.4, 0.4, 0.4)
 DETAIL_FIX_COLOR = (0.8, 0.8, 0.8)
 
-@dataclass(init=False)
 class Cell:
-    name: str
-    x: float
-    y: float
-    width: float
-    height: float
-    is_fix: bool
-    is_merge: bool
-    color: tuple[float, float, float]
-    # index in visualization buffer
-    pos: int
-
-    def __init__(self, name, x, y, width, height, is_fix, is_merge, pos):
+    def __init__(self, name: str, x: float, y: float, width: float, height: float, 
+                 is_fix: bool, is_merge: bool, pos: int):
         self.name = name
         self.x = x
         self.y = y
@@ -46,18 +32,18 @@ class Cell:
         self.is_fix = is_fix
         self.is_merge = is_merge
         self.color = MERGE_COLOR if is_merge else (FIX_COLOR if is_fix else NOTFIX_COLOR)
-        self.pos = pos
+        self.pos = pos # index in visualization buffer
 
 class Canva:
-    def __init__(self, x0, y0, x1, y1, display = True):
+    def __init__(self, x0: float, y0: float, x1: float, y1: float, buffer_size: int, display = True):
         self.x0 = x0
         self.x1 = x1
         self.y0 = y0
         self.y1 = y1
 
         RESOLUTION[0] = int(RESOLUTION[1] * (x1 - x0) / (y1 - y0))
-        self.vertices = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
-        self.vertices_color = np.empty((BUFFER_SIZE*8*3,), dtype=np.float32)
+        self.vertices = np.empty((buffer_size*8*3,), dtype=np.float32)
+        self.vertices_color = np.empty((buffer_size*8*3,), dtype=np.float32)
         self.vertex_num = 0
         self.merge_cell_init = False
         self.merge_cell_vertices = np.empty((4*3,), dtype=np.float32)
@@ -65,7 +51,7 @@ class Canva:
 
         self.initOpenGL(display)
 
-    def initOpenGL(self, display):
+    def initOpenGL(self, display: bool):
         # GLUT setup and main loop
         if not glfw.init():
             raise RuntimeError("Failed to initialize GLFW")
@@ -135,6 +121,7 @@ class Canva:
         self.vbo_merge_cell_colors = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
         glBufferData(GL_ARRAY_BUFFER, self.merge_cell_vertices_color.nbytes, self.merge_cell_vertices_color , GL_STATIC_DRAW)
+        
         # merge cell color not change, update directly
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
         glBufferSubData(GL_ARRAY_BUFFER, 0, self.merge_cell_vertices_color.nbytes, self.merge_cell_vertices_color)
@@ -143,10 +130,7 @@ class Canva:
         i = self.vertex_num
         cell.pos = i
         self.vertex_num += 1
-        if cell.is_merge:
-            z = -1.0
-        else:
-            z = 1.0
+        z = -1. if cell.is_merge else 1.0
         self.setCellPosition(cell, z)
         self.setCellColor(cell)
     
@@ -184,6 +168,11 @@ class Canva:
         width = cell.width
         height = cell.height
         offset = i*8*3
+        #  6----5
+        # 7      4
+        # |      |
+        # 8      3
+        #  1----2
         self.vertices[offset:offset + 24] = [
             x, y, z,
             x + width, y, z,
@@ -201,6 +190,11 @@ class Canva:
         w = cell.width
         h = cell.height
         self.merge_cell_init = True
+        # 3 ---- 4
+        # |      |
+        # |      |
+        # |      |
+        # 1 ---- 2
         self.merge_cell_vertices[:] = [
             x, y, 0.0,
             x + w, y, 0.0,
@@ -228,7 +222,7 @@ class Canva:
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo_colors)
         glColorPointer(3, GL_FLOAT, 0, None)  # Set color pointer
 
-        # Draw all rectangles with a single draw call
+        # draw rectangle border lines
         glDrawArrays(GL_LINES, 0, self.vertex_num * 8)  # Each rectangle has 8 vertices (lines)
 
         if self.merge_cell_init:
@@ -238,7 +232,7 @@ class Canva:
             glBindBuffer(GL_ARRAY_BUFFER, self.vbo_merge_cell_colors)
             glColorPointer(3, GL_FLOAT, 0, None)  # Set color pointer
 
-            # Draw all rectangles with a single draw call
+            # draw filled rectangle
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)  # Each rectangle has 4 vertices
 
         glDisableClientState(GL_VERTEX_ARRAY)
@@ -246,7 +240,7 @@ class Canva:
 
         glFlush()
 
-    # OpenGL display setup
+    # draw and swap buffer
     def display(self):
         self.draw()
         glfw.swap_buffers(self.window)
@@ -259,20 +253,9 @@ class OptimizeStep:
     added_cell: Cell
     moved_cells: list[tuple[str, tuple[float, float]]] 
 
-@dataclass
 class Board:
-    lower_row_y = float('inf')
-    row_height = -1.
-    cells: dict[str, Cell]
-    cells_mapping: SortedDict[int, str]
-    x0 = 0
-    y0 = 0
-    x1 = 0
-    y1 = 1
-    canva: Canva
-
     def __init__(self, display = False):
-        self.cells = {}
+        self.cells: dict[str, Cell] = {}
         self.cells_mapping = SortedDict()
         self.display = display
 
@@ -284,21 +267,17 @@ class Board:
 
     def parser(self, lg_filename: str):
         with open(lg_filename, "r") as input:
-            lg_lines = input.readlines()
+            lg_lines = input.read().splitlines()
         self.x0, self.y0, self.x1, self.y1 = map(float, lg_lines[2].strip().split(' ')[1:])
         lg_lines = lg_lines[3:] 
-        row_x = -1
-        for i, line in enumerate(lg_lines):
-            line = line.strip()
+        for line in lg_lines:
             if line.startswith("PlacementRows"):
                 pass
             else:
                 name, x, y, width, height, fix = line.split(' ')
                 self.cells[name] = Cell(name, float(x), float(y), float(width), float(height), True if fix == "FIX" else False, False, -1)
 
-        global BUFFER_SIZE
-        BUFFER_SIZE = len(self.cells) + 10
-        self.canva = Canva(self.x0, self.y0, self.x1, self.y1, self.display)
+        self.canva = Canva(self.x0, self.y0, self.x1, self.y1, len(self.cells) + 10, self.display)
         for cell in self.cells.values():
             self.canva.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
@@ -313,12 +292,14 @@ class Board:
     # step for opt
     def step(self, optimizeStep: OptimizeStep):
         self.contain_merge_cell = True
+        # draw prev merge cell
         if self.prev_merge_cell is not None:
             self.canva.pushCell(self.prev_merge_cell)
             idx = self.prev_merge_cell.pos
             self.cells_mapping[idx] = self.prev_merge_cell.name
             self.cells[self.prev_merge_cell.name].pos = idx
 
+        # remove merged cell
         for cell_name in optimizeStep.removed_cells:
             # get last cell
             last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
@@ -336,6 +317,7 @@ class Board:
         self.canva.setMergeCell(optimizeStep.added_cell)
         self.prev_merge_cell = optimizeStep.added_cell
 
+        # move all cell
         for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
             cell = self.cells[cell_name]
             cell.x = cell_x
@@ -349,18 +331,19 @@ class Board:
     def detailStep(self, optimizeStep: OptimizeStep):
         self.contain_merge_cell = True
         if len(self.illegal_cells) == 0:
+            # draw prev merge cell
             if self.prev_merge_cell is not None:
                 self.canva.pushCell(self.prev_merge_cell)
                 idx = self.prev_merge_cell.pos
                 self.cells_mapping[idx] = self.prev_merge_cell.name
                 self.cells[self.prev_merge_cell.name].pos = idx
+            
+            # reset color and z index for prev moved cell
             for cell in self.prev_moved_cells:
                 cell.color = MERGE_COLOR if cell.is_merge else NOTFIX_COLOR
                 self.canva.setCellColor(cell)
-                if cell.is_merge:
-                    z = -1
-                else:
-                    z = 1
+
+                z = -1. if cell.is_merge else 1.
                 self.canva.setCellPosition(cell, z) # use to reset z
             self.prev_moved_cells = []
 
@@ -411,6 +394,7 @@ class Board:
             else:
                 i += 1
 
+        # all cell are legal, setup all rest cells
         if len(self.illegal_cells) == 0:    
             for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
                 cell = self.cells[cell_name]
@@ -420,7 +404,6 @@ class Board:
                 self.canva.setCellPosition(cell, -0.7)
                 self.canva.setCellColor(cell)
                 self.prev_moved_cells.append(cell)
-
 
         self.canva.updateAllBuffer()
         return len(self.illegal_cells) == 0
@@ -445,7 +428,7 @@ class Visualizer:
                 .filter('vflip') # vertical flip to convert opengl coordinate to normal coordinate
                 .output(output_file, pix_fmt=args.pix_fmt, vcodec=args.vcodec, crf=args.crf, preset=args.preset)
                 .overwrite_output() # override output if exist
-                .run_async(pipe_stdin=True)
+                .run_async(pipe_stdin=True) #input from stdin
             )
 
         self.display = display
@@ -464,18 +447,16 @@ class Visualizer:
     # combine post and opt data
     def optimizeStepInit(self, opt_file, post_file):
         with open(opt_file, "r") as file:
-            opt_lines = file.readlines()
+            opt_lines = file.read().splitlines()
         with open(post_file, "r") as file:
-            post_lines = file.readlines()
-
-        for i in range(len(post_lines)):
-            post_lines[i] = post_lines[i].strip()
+            post_lines = file.read().splitlines()
 
         post_line_idx = 0
         for line in opt_lines:
-            line = line.strip()
             parts = line.split(' ')
 
+            # <merge list> --> <name> <x> <y> <width> <height>
+            #    1:-6      -6    -5   -4   -3   -2       -1
             name = parts[-5]
             original_x, original_y, width, height = map(float, parts[-4:])
             parts = parts[1:-6]
@@ -521,6 +502,7 @@ class Visualizer:
                 self.terminate()
                 return True
 
+        # swap buffer only if display
         if self.display:
             self.board.canva.display()
         else:   
