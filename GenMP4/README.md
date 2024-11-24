@@ -23,6 +23,10 @@ A Visualizer to visualize the steps in a legalizer.
 
 - **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
 - The environment can be set up using the `environment.yml` file.
+  ```
+  $ conda env create -f environment.yml
+  $ conda activate PDALab3VisualizationTest
+  ```
 
 ## Usage
 To run the visualizer, use the following command:
