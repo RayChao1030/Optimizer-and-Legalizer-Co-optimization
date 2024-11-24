@@ -21,12 +21,21 @@ A Visualizer to visualize the steps in a legalizer.
 
 ## Requirements
 
-- **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
-- The environment can be set up using the `environment.yml` file.
+- **Platform**: Tested on Windows and Linux servers (with Xterm). Other platforms have not been tested, but the program requires a screen to run.
+- **For Windows**:
+Use the `environment.yml` file to set up the Conda environment:
   ```
   $ conda env create -f environment.yml
   $ conda activate PDALab3VisualizationTest
   ```
+- **For Linux Servers**:
+Use the `environment_linux.yml` file for setup:
+  ```
+  $ conda env create -f environment_linux.yml
+  $ conda activate PDALab3VisualizationTest
+  ```
+> [!WARNING]
+> Running on a Linux server with Xterm is not recommended. The rendering speed (~8fps) is approximately 0.05x slower compared to running directly on Windows (~150fps). 
 
 ## Usage
 To run the visualizer, use the following command:
