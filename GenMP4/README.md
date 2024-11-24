@@ -1,53 +1,128 @@
 # Fast Optimization Visualizer
 
+## Introduction
+A Visualizer to visualize the steps in a legalizer.  
+- The Visualizer supports two modes:
+  - **Normal Mode** (default): Provides a quick overview of the legalization process. All cells moved in a step are visualized together in a single frame.
+  - **Detail Mode**: Offers an in-depth view of how each cell is legalized. This mode highlights individual cell movements (e.g., how overlapping cells are pushed) while grayscaling all unrelated cells, allowing users to focus on the cells being moved in the current step.
+
+## Demo
+- **Normal Mode**
+
+  https://github.com/user-attachments/assets/8ce3b3be-8d17-4f6f-9762-ed8ba8206fdc
+
+  https://github.com/user-attachments/assets/f6263b54-0a42-4c62-b433-9071680163af
+
+- **Detail Mode**  (the video is long because fps set to 2 for better visual effect)
+
+  https://github.com/user-attachments/assets/80490972-3fd6-4274-8ba7-91714f4016fd
+
+  https://github.com/user-attachments/assets/086032d1-09c7-4a3b-9c2c-7b5d4ee4864c
+
 ## Requirements
-- **Platform**: Tested on Windows. Other platforms have not been tested, but the program requires a screen to run.
-- The environment can be set up using the `environment.yml` file.
+
+- **Platform**: Tested on Windows and Linux servers (with Xterm). Other platforms have not been tested, but the program requires a screen to run.
+- **For Windows**:
+Use the `environment.yml` file to set up the Conda environment:
+  ```
+  $ conda env create -f environment.yml
+  $ conda activate PDALab3VisualizationTest
+  ```
+- **For Linux Servers**:
+Use the `environment_linux.yml` file for setup:
+  ```
+  $ conda env create -f environment_linux.yml
+  $ conda activate PDALab3VisualizationTest
+  ```
+> [!WARNING]
+> Running on a Linux server with Xterm is not recommended. The rendering speed (~8fps) is approximately 0.05x slower compared to running directly on Windows (~150fps). 
 
 ## Usage
 To run the visualizer, use the following command:
 ```bash
-$ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
+$ main.py -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display] [-detail] [-vcodec VCODEC] [-preset PRESET] [-crf CRF] [-pix_fmt PIX_FMT] [-framerate FPS]
 ```
-Alternatively, you can run the executable file:
+- There are two mode in this Visualizer:
+  - Normal(default): For quick outline the legalize process, all cell moved in that step will move together in a frame
+  - Detail: For realize how cell legalized (how to push other cells and how cells move), all color except cells related to current step is in grayscale to allow user can focus on cells moved in current step.  
+
+## Arguments
+- Input Files:
+  - `-lg`: Initial cell file
+  - `-opt`: Optimization step file
+  - `-postlg`: Legalizer output file
+- Output File:
+  - `-o`: Specifies the video output file. Supports all formats compatible with `ffmpeg`.
+- Options
+  - `-display`: Enables rendering frames on the screen. Rendering is faster without display.
+  - `-detail`: Enables detailed mode, in each step, it will place merge cell first, and then move all overlapped cell one by one in each frame
+- FFmpeg Settings:
+  - argument pass to ffmpeg, see [ffmpeg documentation](https://www.ffmpeg.org/ffmpeg.html) for more information
+  - `-vcodec`: Video codec (default: `h264`)
+  - `-preset`: Encoding speed/quality trade-off (default: `ultrafast`)
+  - `-crf`: Quality factor (default: `18`)
+  - `-pix_fmt`: Pixel format (default: `yuv444p`)
+  - `-framerate`: Video frame rate (default: `60`)
+
+## Generating a GIF
+- To convert the MP4 output to a GIF, use the following `ffmpeg` command (included in the environment):
 ```bash
-$ visualizer.exe -lg *.lg -opt *.opt -postlg *_post.lg -o output.mp4 [-display]
+$ ffmpeg -ss 30 -t 3 -i input.mp4 \
+    -vf "fps=10,scale=320:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+    -loop 0 output.gif
 ```
-> [!WARNING]
-> Currently, since the packed version using `PyInstaller` may not produce correct results, the exe file is an older version, which is slower. The performance gap is significant between the exe file (~40 step per second) and the Python script (~130 step per second). It is strongly recommended to use the Python script. 
+-  Detailed instructions are available in this [Stack Exchange post](https://superuser.com/questions/556029/how-do-i-convert-a-video-to-gif-using-ffmpeg-with-reasonable-quality)
 
-- `-display`: Enables rendering the frames on the screen. If not set, the rendering process will be faster.
+## Color Guide
+1. **Not Fixed Cells**: grey in detail mode, green in nomal mode
+2. **Fixed Cells**: dark gray in detail mode, red in nomal mode
+3. **Merged Cells**: blue
+4. **Current Step Merged Cell**: Cyan (filled)
+5. **Cells Needing Legalization**: red, detail mode only
+6. **Cells Legalized in This Step**: green, detail mode only
+- You can change all above color in the header part of `main.py`
 
-
-- The visualizer will generate a 60 FPS MP4 video, where each step is displayed for 1 frame (1/60 s).
-
-> [!NOTE]
-> - The `.exe` file is packaged with `pyinstaller` using the command:
-> ```
-> $ pyinstaller --onefile --name visualizer main.py
-> ```
-
-
-## Result
-- The results are based on the solution provided by my Legalizer and are intended for reference only:
+## Results
+### Runtime Performance (very fast!)
+  - All data below is generated using the settings: `-crf 18 -vcodec h264 -preset ultrafast`
 
 |      Testcase     |# of Steps|# of Moved Cells|Output time|Runtime|Generate Speed|
 |-------------------|----------|----------------|-----------|-------|--------------|
-|  testcase1_16900  |    1781  |      1438      |    29s    | 14.09s|   126.40fps  |
-|testcase1_ALL0_5000|    3420  |      8420      |    57s    | 26.14s|   130.83fps  |
-|   testcase2_100   |    2949  |      654       |    49s    | 25.92s|   133.77fps  |
-|testcase1_MBFF_LIB_7000|9632  |      9396      |    160s   | 70.44s|   136.74fps  |
+|  testcase1_16900  |    1781  |      1438      |    29s    | 11.81s|   150.80fps  |
+|testcase1_ALL0_5000|    3420  |      8420      |    57s    | 21.70s|   157.60fps  |
+|   testcase2_100   |    2949  |      654       |    49s    | 23.63s|   124.79fps  |
+|testcase1_MBFF_LIB_7000|9632  |      9396      |    160s   | 61.77s|   155.93fps  |
 
-Here are two example videos generated by the visualizer:
+- Videos of large test cases are omitted due to size constraints, only the small test cases (`testcase1_16900`, `testcase2`) are shown at the beginning of this readme. For other test cases, refer to the MP4 files in the folder.
 
-https://github.com/user-attachments/assets/88aff6f9-eb5d-4a24-b792-8ab3ea50d211
+### Performance Comparison: Encoding Settings
 
-https://github.com/user-attachments/assets/4306608e-f9d9-4c46-9a3b-f2ad720b55c6
+| h264 |    preset   | veryslow |  slow | medium | fast |veryfast|ultrafast|
+|------|-------------|----------|-------|--------|------|--------|---------|
+|crf=0 | runtime(s)  |  17.17   | 14.82 |  15.14 | 13.67|  13.46 |  12.38  |
+|      |file size(KB)|  12646   | 12717 |  12947 | 12941|  13329 |  23141  |
+|crf=18| runtime(s)  |  28.68   | 21.08 |  16.91 | 13.6 |  14.02 | *12.36* |
+|      |file size(KB)|  12810   | 13289 |  13177 | 12762|  10552 |  22972  |
+|crf=23| runtime(s)  |  29.92   | 18.92 |  15.4  | 13.99|  13.06 |  12.38  |
+|      |file size(KB)|  10551   | 10780 |  10689 | 10389|   8453 |  18263  |
 
-Since the videos of other test cases are too large to upload to the GitHub README, only the small test cases (`testcase1_16900`, `testcase2`) are shown here. For other test cases, refer to the MP4 files in the folder.
-> [!NOTE]
-> Since the generated videos can be large, the above demo video has been compressed using `ffmpeg`. To compress your own videos, use the following command:
-> ```
-> $ ffmpeg -i "{filename}.mp4" -c:v libx264 -crf 18 -preset veryfast -c:a copy "{filename}_compress.mp4
-> ```
-> - Increasing the CRF value reduces the file size but also lowers video quality.
+| h265 |    preset   | veryslow |  slow | medium | fast |veryfast|ultrafast|
+|------|-------------|----------|-------|--------|------|--------|---------|
+|crf=0 | runtime(s)  |  279.19  | 29.95 |  17.18 | 17.07|  16.16 |   15    |
+|      |file size(KB)|  23334   | 22971 |  23585 | 23585|  22539 |  27940  |
+|crf=18| runtime(s)  |  234.04  | 28.14 |  16.9  | 17.11|  16.24 |  14.54  |
+|      |file size(KB)|  12476   | 12476 |  12222 | 11493|  11510 |  13487  |
+|crf=23| runtime(s)  |  207.54  | 27.84 |  16.82 | 16.75|  15.98 |  14.66  |
+|      |file size(KB)|   9951   | 9615  |   9469 | 8762 |   8733 |  10091  |
+|crf=28| runtime(s)  |  187.16  | 28.97 |  16.58 | 15.65|  15.65 |  14.56  |
+|      |file size(KB)|   7417   | 7086  |   6815 | 6143 | *6071* |   6975  |
+- **Observations**
+  - HEVC provides better quality and smaller file sizes compared to H.264.
+  - H.264 has faster encoding times.
+  - crf 23 in H.264 is approximately same as crf 28 in HEVC
+  - H.264 is generally greater than HEVC on runtime
+  - HEVC is generally greater than H.264 on file size
+- **Recommended settings:**
+  - Best Runtime: `h264`, `ultrafast`
+  - Smallest File Size: `hevc`, `veryfast`
+
