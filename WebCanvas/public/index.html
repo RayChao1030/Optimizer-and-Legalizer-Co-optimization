@@ -1,0 +1,50 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Optimizer and Legalizer Process Visualization</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #controls {
+        margin-bottom: 10px;
+      }
+      #controls label {
+        margin-right: 10px;
+      }
+      canvas {
+        width: 800px;
+        height: 800px;
+        aspect-ratio: 1 / 1;
+        border: 1px solid #ccc;
+        background-color: #f9f9f9;
+      }
+      #progress {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <label>
+        <strong>.lg File:</strong>
+        <input type="file" id="lgFile" accept=".lg" />
+      </label>
+      <label>
+        <strong>.opt File:</strong>
+        <input type="file" id="optFile" accept=".opt" />
+      </label>
+      <label>
+        <strong>_post.lg File:</strong>
+        <input type="file" id="postLgFile" accept=".lg" />
+      </label>
+      <button id="startButton" disabled>Start Animation</button>
+    </div>
+    <div id="progress">Waiting for file uploads...</div>
+    <canvas id="canvas" width="800" height="800"></canvas>
+
+    <script src="script.js"></script>
+  </body>
+</html>

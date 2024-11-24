@@ -1,6 +1,0 @@
-Banking_Cell: FF_1_0 FF_1_1 --> FF_2_0 10 0 10 10
-Banking_Cell: FF_1_2 FF_1_3 --> FF_2_1 20 0 10 10
-Banking_Cell: FF_1_4 FF_1_5 --> FF_2_2 10 10 10 10
-Banking_Cell: FF_1_6 FF_1_7 --> FF_2_3 20 10 10 10
-Banking_Cell: FF_1_8 FF_1_9 --> FF_2_4 10 20 10 10
-Banking_Cell: FF_1_10 --> FF_2_5 20 20 5 10
