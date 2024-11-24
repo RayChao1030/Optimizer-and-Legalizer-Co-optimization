@@ -68,7 +68,11 @@ python UTIL_RATE.py ./tc/testcase2_100.lg ./tc/testcase2_100.opt ./tc/testcase2_
 
 
 ## 🎥 Enjoy visualizing your MBFF optimization process!
+### testcase1_16900
 ![testcase1_16900](./testcase1_16900.gif)
+### testcase1_ALL0_5000
 ![testcase1_ALL0_5000](./testcase1_ALL0_5000.gif)
+### testcase2_100
 ![testcase2_100](./testcase2_100.gif)
+### testcase1_MBFF_LIB_7000
 ![testcase1_MBFF_LIB_7000](./testcase1_MBFF_LIB_7000.gif)
