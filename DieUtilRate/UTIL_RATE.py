@@ -120,9 +120,7 @@ def read_lg_file(file_path: str, placement_rows: List[PlacementRow], components:
             is_fixed = (is_fixed_str == "FIX")
             components.append(Component(name, int(x), int(y), int(w), int(h), is_fixed))
 
-
 # Function to read and parse the opt file
-
 def read_opt_file(file_path: str, banking_cells: List[BankingCell]) -> None:
     """
     Parse OPT file and populate the banking_cells list.
@@ -205,74 +203,12 @@ def parse_arguments():
     parser.add_argument("lgfile", type=str, help="Path to the LG file.")
     parser.add_argument("optfile", type=str, help="Path to the OPT file.")
     parser.add_argument("postfile", type=str, help="Path to the POST file.")
-    parser.add_argument("utilGraphDir", type=str, help="Directory to save utilization heatmaps.")
+    #parser.add_argument("utilGraphDir", type=str, help="Directory to save utilization heatmaps.")
     parser.add_argument("xStepNum", type=int, help="Number of grid steps in X direction.")
     parser.add_argument("yStepNum", type=int, help="Number of grid steps in Y direction.")
     parser.add_argument("stepCut", type=int, help="Step interval for saving intermediate heatmaps.")
     return parser.parse_args()
-
-''' 
-### for gif
-def remove_transparency(image_folder: str, background_color=(255, 255, 255)):
-    for file in sorted(os.listdir(image_folder)):
-        if file.lower().endswith(".png"):  # Use .lower() to ensure case-insensitive match
-            img_path = os.path.join(image_folder, file)
-            img = Image.open(img_path)
-            if img.mode in ("RGBA", "LA"):
-                background = Image.new("RGB", img.size, background_color)
-                background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
-                background.save(img_path)
-                print(f"Removed transparency from {file}")
-
-def resize_images_to_uniform_size(image_folder: str, target_size: tuple):
-    """
-    Resize all images in the folder to the target size.
-
-    Args:
-        image_folder (str): Directory containing images.
-        target_size (tuple): Target size as (width, height).
-    """
-    for file in sorted(os.listdir(image_folder)):
-        if file.lower().endswith(".png"):  # Ensure only .png files are processed
-            img_path = os.path.join(image_folder, file)
-            img = Image.open(img_path)
-            resized_img = img.resize(target_size, resample=Image.Resampling.LANCZOS)
-            resized_img.save(img_path)
-            print(f"Resized {file} to {target_size}")
-
-
-def check_image_shapes(image_folder: str):
-    """
-    Check and print the dimensions and mode of PNG images in the folder.
-    """
-    for file in sorted(os.listdir(image_folder)):
-        if file.lower().endswith(".png"):  # Ensure only .png files are processed
-            img = Image.open(os.path.join(image_folder, file))
-            print(f"Image: {file}, Size: {img.size}, Mode: {img.mode}")
-
-
-def create_gif(image_folder: str, gif_filename: str, duration: float):
-    """
-    Create a GIF from a sequence of PNG images in a specified folder.
-
-    Args:
-        image_folder (str): Path to the folder containing images.
-        gif_filename (str): Output GIF file path.
-        duration (float): Duration of each frame in seconds.
-    """
-    # Collect only .png files, sorted by filename
-    images = sorted([os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(".png")])
-
-    # Read and save images as a GIF
-    gif_images = [imageio.imread(img) for img in images]
-    imageio.mimsave(gif_filename, gif_images, duration=duration)
-    print(f"GIF saved to {gif_filename}")
-
-'''
 ###
-
-import io
-from PIL import Image
 
 def main():
     # 灰階的深淺降低幅度
@@ -285,7 +221,7 @@ def main():
     lgfile = args.lgfile
     optfile = args.optfile
     postfile = args.postfile
-    utilGraphDir = args.utilGraphDir  # For saving final GIF
+    utilGraphDir = "./"  # For saving final GIF
     xStepNum = args.xStepNum
     yStepNum = args.yStepNum
     stepCut = args.stepCut
@@ -517,7 +453,10 @@ def main():
             plt.close(fig)
 
     # Save the GIF
-    gif_output_path = os.path.join(utilGraphDir, "output.gif")
+    filename_with_extension = os.path.basename(lgfile)
+    filename_without_extension = os.path.splitext(filename_with_extension)[0]
+    filename_without_extension += ".gif"
+    gif_output_path = os.path.join(utilGraphDir, filename_without_extension)
     gif_frames[0].save(
         gif_output_path,
         save_all=True,
