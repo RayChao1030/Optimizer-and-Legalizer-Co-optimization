@@ -1,26 +1,34 @@
 # NYCU PDA Lab3 Optimizer and Legalizer Co-optimization
 
-:::    info
+
 Update log:
 2024/11/2 23:51 GMT-4: Update QA about placement row
+
 2024 11/6 11:42 GMT+8: Update QA, update evaluator
+
 2024 11/6 20:58 GMT+8: Update Evaluator (Runnable on mseda01) & QA session
+
 2024 11/9 11:31 GMT+8: Update Report requirement
+
 2024 11/10 8:03 GMT+8: Update QA for server loading & useful tools to monitor the server resource on Q5
+
 2024 11/11 18:58 GMT+8: Update Evaluator (output precision)!
+
 2024 11/12 15:38 GMT+8: Update Evaluator (check the startX of placementrow)
+
 2024 11/15 18:38 GMT+8: Please implement `make clean` in your Makefle
+
 2024 11/16 16:26 GMT+8: Upload a hellish testcase.
-*    [LG](https://github.com/coherent17/Optimizer-and-Legalizer-Co-optimization/blob/main/testcase/testcase1_MBFF_LIB_7000.lg) 
+*    [LG](https://github.com/coherent17/Optimizer-and-Legalizer-Co-optimization/blob/main/testcase/testcase1_MBFF_LIB_7000.lg)
+*    
 *    [OPT](https://github.com/coherent17/Optimizer-and-Legalizer-Co-optimization/blob/main/testcase/testcase1_MBFF_LIB_7000.opt)
+*    
 *    Banking Summary:
     ![image](https://hackmd.io/_uploads/SkIvwAHfyx.png)
 
 2024 11/20 00:56 GMT+8 Should be the last  announcement, no late submission is available. If your submit files have wrong folder structure, you should get 0 point for this lab ofc. Keep working!!
-:::
 
-Table of Content
-[TOC]
+
 
 ## Preface
 *    1. Timing ECO
