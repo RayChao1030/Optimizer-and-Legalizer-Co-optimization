@@ -288,7 +288,6 @@ class OptimizeStep:
     moved_cells: list[tuple[str, tuple[float, float]]] 
 
 class DetailStatus:
-    REMOVE = 0
     MERGE = 1
     MOVE = 2
     SHOWRESULT = 3
@@ -311,7 +310,7 @@ class Visualizer:
         self.n_step = 0
 
         # setup step function
-        self._step = self.normalStep if detail else self.detailStep
+        self._step = self.detailStep if detail else self.normalStep
 
     def lgParser(self, lg_file: str):
         with open(lg_file, "r") as input:
@@ -419,7 +418,7 @@ class Visualizer:
     def detailStep(self, index: int):
         optimizeStep = self.optimize_cases[index]
         match self.detail_status:
-            case DetailStatus.REMOVE:
+            case DetailStatus.MERGE:
                 # mark remove cell
                 for cell_name in optimizeStep.removed_cells:
                     current_cell = self.cells[cell_name]
@@ -427,8 +426,6 @@ class Visualizer:
                     self.canva.setCellColor(current_cell)
                     self.canva.setCellPosition(current_cell, -1.)
 
-                self.detail_status = DetailStatus.MERGE
-            case DetailStatus.MERGE:
                 # add merge cell
                 name = optimizeStep.added_cell.name
                 self.cells[name] = optimizeStep.added_cell
@@ -502,9 +499,9 @@ class Visualizer:
                     self.canva.setCellPosition(cell, z) # use to reset z
                 self.prev_moved_cells = []
 
-                self.detail_status = DetailStatus.REMOVE
+                self.detail_status = DetailStatus.MERGE
         self.canva.updateAllBuffer()
-        return self.detail_status == DetailStatus.REMOVE
+        return self.detail_status == DetailStatus.MERGE
 
     # return finish or not
     def step(self):
