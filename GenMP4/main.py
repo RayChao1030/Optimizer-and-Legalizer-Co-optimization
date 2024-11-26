@@ -18,8 +18,10 @@ LEGAL_COLOR = (0.0, 1.0, 0.0)
 ILLEGAL_COLOR = (1.0, 0.0, 0.0)
 
 # override above setting in detail mode
-DETAIL_NOTFIX_COLOR = (0.4, 0.4, 0.4)
-DETAIL_FIX_COLOR = (0.8, 0.8, 0.8)
+DETAIL_NOTFIX_COLOR = (0.8, 0.8, 0.8)
+DETAIL_FIX_COLOR = (0.4, 0.4, 0.4)
+REMOVE_COLOR = (1.0, 1.0, 0.0)
+ORIGINAL_MERGE_COLOR = (1.0, 0.0, 1.0)
 
 class Cell:
     def __init__(self, name: str, x: float, y: float, width: float, height: float, 
@@ -248,10 +250,16 @@ class Canva:
 @dataclass
 class OptimizeStep:
     removed_cells: list[str]
-    original_insert_x: float
-    original_insert_y: float
+    merge_x: float
+    merge_y: float
     added_cell: Cell
     moved_cells: list[tuple[str, tuple[float, float]]] 
+
+class DetailStatus:
+    REMOVE = 0
+    MERGE = 1
+    MOVE = 2
+    SHOWRESULT = 3
 
 class Board:
     def __init__(self, display = False):
@@ -259,11 +267,12 @@ class Board:
         self.cells_mapping = SortedDict()
         self.display = display
 
-        self.illegal_cells = []
+        self.illegal_cells: list[tuple[str, tuple[float, float]]] = []
         self.prev_moved_cells: list[Cell] = []
 
         self.contain_merge_cell = False
-        self.prev_merge_cell: Cell = None
+        self.prev_merge_cell_name: str = None
+        self.detail_status = DetailStatus.SHOWRESULT
 
     def parser(self, lg_filename: str):
         with open(lg_filename, "r") as input:
@@ -291,13 +300,13 @@ class Board:
 
     # step for opt
     def step(self, optimizeStep: OptimizeStep):
-        self.contain_merge_cell = True
         # draw prev merge cell
-        if self.prev_merge_cell is not None:
-            self.canva.pushCell(self.prev_merge_cell)
-            idx = self.prev_merge_cell.pos
-            self.cells_mapping[idx] = self.prev_merge_cell.name
-            self.cells[self.prev_merge_cell.name].pos = idx
+        if self.prev_merge_cell_name is not None:
+            cell = self.cells[self.prev_merge_cell_name]
+            self.canva.pushCell(cell)
+            idx = cell.pos
+            self.cells_mapping[idx] = self.prev_merge_cell_name
+            self.cells[self.prev_merge_cell_name].pos = idx
 
         # remove merged cell
         for cell_name in optimizeStep.removed_cells:
@@ -315,7 +324,9 @@ class Board:
 
         self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
         self.canva.setMergeCell(optimizeStep.added_cell)
-        self.prev_merge_cell = optimizeStep.added_cell
+        optimizeStep.added_cell.x = optimizeStep.merge_x
+        optimizeStep.added_cell.y = optimizeStep.merge_y
+        self.prev_merge_cell_name = optimizeStep.added_cell.name
 
         # move all cell
         for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
@@ -329,84 +340,104 @@ class Board:
 
     # step for opt in detail
     def detailStep(self, optimizeStep: OptimizeStep):
-        self.contain_merge_cell = True
-        if len(self.illegal_cells) == 0:
-            # draw prev merge cell
-            if self.prev_merge_cell is not None:
-                self.canva.pushCell(self.prev_merge_cell)
-                idx = self.prev_merge_cell.pos
-                self.cells_mapping[idx] = self.prev_merge_cell.name
-                self.cells[self.prev_merge_cell.name].pos = idx
-            
-            # reset color and z index for prev moved cell
-            for cell in self.prev_moved_cells:
-                cell.color = MERGE_COLOR if cell.is_merge else NOTFIX_COLOR
-                self.canva.setCellColor(cell)
+        match self.detail_status:
+            case DetailStatus.REMOVE:
+                # mark remove cell
+                for cell_name in optimizeStep.removed_cells:
+                    current_cell = self.cells[cell_name]
+                    current_cell.color = REMOVE_COLOR
+                    self.canva.setCellColor(current_cell)
+                    self.canva.setCellPosition(current_cell, -1.)
 
-                z = -1. if cell.is_merge else 1.
-                self.canva.setCellPosition(cell, z) # use to reset z
-            self.prev_moved_cells = []
+                self.detail_status = DetailStatus.MERGE
+            case DetailStatus.MERGE:
+                # add merge cell
+                name = optimizeStep.added_cell.name
+                self.cells[name] = optimizeStep.added_cell
+                self.prev_merge_cell_name = name
+                optimizeStep.added_cell.color = ORIGINAL_MERGE_COLOR
+                # draw merge cell on oringal position
+                self.canva.pushCell(optimizeStep.added_cell)
+                idx = optimizeStep.added_cell.pos
+                self.cells_mapping[idx] = name
+                self.cells[name].pos = idx
 
-            # remove merged cell
-            for cell_name in optimizeStep.removed_cells:
-                # get last cell
-                last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
-                current_cell = self.cells[cell_name]
-                # remove current cell by swap back to current and remove back
-                self.canva.swapCell(last_cell_idx, current_cell.pos)
-                self.canva.popCell()
-                self.cells_mapping[current_cell.pos] = last_cell_name
-                self.cells[last_cell_name].pos = current_cell.pos
+                self.illegal_cells.append((name, (optimizeStep.merge_x, optimizeStep.merge_y)))
 
-                del self.cells_mapping[last_cell_idx]
-                del self.cells[cell_name]
+                self.detail_status = DetailStatus.MOVE
+            case DetailStatus.MOVE:
+                moved_cell_name, move_to = self.illegal_cells.pop()
+                moved_cell = self.cells[moved_cell_name]
+                
 
-            self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
-            self.prev_merge_cell = optimizeStep.added_cell
-            self.canva.setMergeCell(optimizeStep.added_cell)
+                # move cell
+                moved_cell.x = move_to[0]
+                moved_cell.y = move_to[1]
+                if moved_cell.name != optimizeStep.added_cell.name:
+                    moved_cell.color = LEGAL_COLOR
+                self.prev_moved_cells.append(moved_cell)
+                if moved_cell.name == optimizeStep.added_cell.name: # merged cell
+                    self.canva.setMergeCell(moved_cell)
 
-            moved_cell = self.cells[optimizeStep.added_cell.name]
-            move_to = moved_cell.x, moved_cell.y
-        else:
-            moved_cell_name, move_to = self.illegal_cells.pop()
-            moved_cell = self.cells[moved_cell_name]
+                    # remove merged cell
+                    for cell_name in optimizeStep.removed_cells:
+                        # get last cell
+                        last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
+                        current_cell = self.cells[cell_name]
+                        # remove current cell by swap back to current and remove back
+                        self.canva.swapCell(last_cell_idx, current_cell.pos)
+                        self.canva.popCell()
+                        self.cells_mapping[current_cell.pos] = last_cell_name
+                        self.cells[last_cell_name].pos = current_cell.pos
 
-            # move cell
-            moved_cell.x = move_to[0]
-            moved_cell.y = move_to[1]
-            moved_cell.color = LEGAL_COLOR
-            self.prev_moved_cells.append(moved_cell)
-            self.canva.setCellColor(moved_cell)
-            self.canva.setCellPosition(moved_cell, -1.0)
-        
-        # mark all cell if overlap with current cell
-        i = 0
-        while i < len(optimizeStep.moved_cells):
-            cell_name, _ = optimizeStep.moved_cells[i]
-            cell = self.cells[cell_name]
-            if self.isOverlap(cell, moved_cell):
-                cell.color = ILLEGAL_COLOR
-                self.canva.setCellColor(cell)
-                self.canva.setCellPosition(cell, -0.7) # use to change z
-                # swap and pop back
-                optimizeStep.moved_cells[i], optimizeStep.moved_cells[-1] = optimizeStep.moved_cells[-1], optimizeStep.moved_cells[i]
-                self.illegal_cells.append(optimizeStep.moved_cells.pop())
-            else:
-                i += 1
+                        del self.cells_mapping[last_cell_idx]
+                        del self.cells[cell_name]
+                else:
+                    self.canva.setCellColor(moved_cell)
+                    self.canva.setCellPosition(moved_cell, -1.0)
 
-        # all cell are legal, setup all rest cells
-        if len(self.illegal_cells) == 0:    
-            for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
-                cell = self.cells[cell_name]
-                cell.x = cell_x
-                cell.y = cell_y
-                cell.color = LEGAL_COLOR
-                self.canva.setCellPosition(cell, -0.7)
-                self.canva.setCellColor(cell)
-                self.prev_moved_cells.append(cell)
+                # mark all cell if overlap with current cell
+                i = 0
+                while i < len(optimizeStep.moved_cells):
+                    cell_name, _ = optimizeStep.moved_cells[i]
+                    cell = self.cells[cell_name]
+                    if self.isOverlap(cell, moved_cell):
+                        cell.color = ILLEGAL_COLOR
+                        self.canva.setCellColor(cell)
+                        self.canva.setCellPosition(cell, -0.7) # use to change z
+                        # swap and pop back
+                        optimizeStep.moved_cells[i], optimizeStep.moved_cells[-1] = optimizeStep.moved_cells[-1], optimizeStep.moved_cells[i]
+                        self.illegal_cells.append(optimizeStep.moved_cells.pop())
+                    else:
+                        i += 1
 
+                # all cell are legal
+                if len(self.illegal_cells) == 0:    
+                    self.detail_status = DetailStatus.SHOWRESULT
+            case DetailStatus.SHOWRESULT:
+                # all cell are legal, setup all rest cells
+                for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
+                    cell = self.cells[cell_name]
+                    cell.x = cell_x
+                    cell.y = cell_y
+                    cell.color = LEGAL_COLOR
+                    self.canva.setCellPosition(cell, -0.7)
+                    self.canva.setCellColor(cell)
+                    self.prev_moved_cells.append(cell)
+                self.canva.merge_cell_init = False # don't draw current cell
+
+                # reset color and z index for prev moved cell
+                for cell in self.prev_moved_cells:
+                    cell.color = MERGE_COLOR if cell.is_merge else NOTFIX_COLOR
+                    self.canva.setCellColor(cell)
+
+                    z = -0.9 if cell.is_merge else 1.
+                    self.canva.setCellPosition(cell, z) # use to reset z
+                self.prev_moved_cells = []
+
+                self.detail_status = DetailStatus.REMOVE
         self.canva.updateAllBuffer()
-        return len(self.illegal_cells) == 0
+        return self.detail_status == DetailStatus.REMOVE
 
 class Visualizer:
     def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool, detail: bool, args):
@@ -475,8 +506,8 @@ class Visualizer:
                 moved_cells.append((parts[0], tuple(map(float, parts[1:]))))
                 post_line_idx+=1
 
-            self.optimize_cases.append(OptimizeStep(removed_cells, original_x, original_y, 
-                                                    Cell(name, x, y, width, height, False, True, -1), moved_cells))
+            self.optimize_cases.append(OptimizeStep(removed_cells, x, y, 
+                                                    Cell(name, original_x, original_y, width, height, False, True, -1), moved_cells))
             
     # https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
     def captureFrame(self):
