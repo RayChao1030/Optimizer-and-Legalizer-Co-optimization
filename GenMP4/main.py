@@ -37,7 +37,7 @@ class Cell:
         self.pos = pos # index in visualization buffer
 
 class Canva:
-    def __init__(self, x0: float, y0: float, x1: float, y1: float, buffer_size: int, display = True):
+    def __init__(self, x0: float, y0: float, x1: float, y1: float, buffer_size: int, output_file: str, display: bool, args):
         self.x0 = x0
         self.x1 = x1
         self.y0 = y0
@@ -52,6 +52,21 @@ class Canva:
         self.merge_cell_vertices_color = np.array(ACTIVE_MERGE_COLOR*4, dtype=np.float32)
 
         self.initOpenGL(display)
+
+        self.video_out = False
+        if output_file:
+            self.video_out = True
+            self.process = (
+                ffmpeg
+                .input('pipe:0', format='rawvideo', pix_fmt='rgb24', s=f'{RESOLUTION[0]}x{RESOLUTION[1]}', framerate=args.framerate)
+                .filter('vflip') # vertical flip to convert opengl coordinate to normal coordinate
+                .output(output_file, pix_fmt=args.pix_fmt, vcodec=args.vcodec, crf=args.crf, preset=args.preset)
+                .overwrite_output() # override output if exist
+                .run_async(pipe_stdin=True) #input from stdin
+            )
+
+        # setup draw function
+        self.draw = self._drawAndSwapBuffer if display else self._draw
 
     def initOpenGL(self, display: bool):
         # GLUT setup and main loop
@@ -95,6 +110,10 @@ class Canva:
             glBindRenderbuffer(GL_RENDERBUFFER, self.depth_buffer)
             glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, backingWidth, backingHeight)
             glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, self.depth_buffer)
+
+            # setup for caputure frame
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.fbo)
+            glReadBuffer(GL_COLOR_ATTACHMENT0)
 
         glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
 
@@ -213,7 +232,7 @@ class Canva:
         offset = i*8*3
         self.vertices_color[offset:offset+24] = color*8
 
-    def draw(self):
+    def _draw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -242,10 +261,23 @@ class Canva:
 
         glFlush()
 
+        if self.video_out:
+            self.captureFrame()
+
     # draw and swap buffer
-    def display(self):
-        self.draw()
+    def _drawAndSwapBuffer(self):
+        self._draw()
         glfw.swap_buffers(self.window)
+
+    # https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
+    def captureFrame(self):
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        pixels = glReadPixels(0, 0, *RESOLUTION, GL_RGB, GL_UNSIGNED_BYTE)
+        self.process.stdin.write(pixels)
+
+    def terminate(self):
+        self.process.stdin.close()
+        self.process.wait() 
 
 @dataclass
 class OptimizeStep:
@@ -261,21 +293,28 @@ class DetailStatus:
     MOVE = 2
     SHOWRESULT = 3
 
-class Board:
-    def __init__(self, display = False):
+class Visualizer:
+    def __init__(self, detail, display = False):
+        self.start_time = time.time()
+
         self.cells: dict[str, Cell] = {}
-        self.cells_mapping = SortedDict()
+        self.cells_mapping: SortedDict[int, str] = SortedDict()
         self.display = display
 
+        self.optimize_cases: list[OptimizeStep] = []
+
+        # detail mode parameter
         self.illegal_cells: list[tuple[str, tuple[float, float]]] = []
         self.prev_moved_cells: list[Cell] = []
-
-        self.contain_merge_cell = False
-        self.prev_merge_cell_name: str = None
         self.detail_status = DetailStatus.SHOWRESULT
 
-    def parser(self, lg_filename: str):
-        with open(lg_filename, "r") as input:
+        self.n_step = 0
+
+        # setup step function
+        self._step = self.normalStep if detail else self.detailStep
+
+    def lgParser(self, lg_file: str):
+        with open(lg_file, "r") as input:
             lg_lines = input.read().splitlines()
         self.x0, self.y0, self.x1, self.y1 = map(float, lg_lines[2].strip().split(' ')[1:])
         lg_lines = lg_lines[3:] 
@@ -286,7 +325,42 @@ class Board:
                 name, x, y, width, height, fix = line.split(' ')
                 self.cells[name] = Cell(name, float(x), float(y), float(width), float(height), True if fix == "FIX" else False, False, -1)
 
-        self.canva = Canva(self.x0, self.y0, self.x1, self.y1, len(self.cells) + 10, self.display)
+    def optimizeStepParser(self, opt_file, post_file):
+        with open(opt_file, "r") as file:
+            opt_lines = file.read().splitlines()
+        with open(post_file, "r") as file:
+            post_lines = file.read().splitlines()
+
+        post_line_idx = 0
+        for line in opt_lines:
+            parts = line.split(' ')
+
+            # <merge list> --> <name> <x> <y> <width> <height>
+            #    1:-6      -6    -5   -4   -3   -2       -1
+            name = parts[-5]
+            original_x, original_y, width, height = map(float, parts[-4:])
+            parts = parts[1:-6]
+
+            removed_cells = []
+            for part in parts:
+                removed_cells.append(part)
+
+            moved_cells = []
+            x, y = map(float, post_lines[post_line_idx].split(' '))
+            post_line_idx+=1
+            moved_num = int(post_lines[post_line_idx]) 
+            post_line_idx+=1
+            for i in range(moved_num):
+                parts = post_lines[post_line_idx].split(' ')
+                moved_cells.append((parts[0], tuple(map(float, parts[1:]))))
+                post_line_idx+=1
+
+            self.optimize_cases.append(OptimizeStep(removed_cells, x, y, 
+                                                    Cell(name, original_x, original_y, width, height, False, True, -1), moved_cells))
+
+    def initCanva(self,  out_file: str, args):
+        self.canva = Canva(self.x0, self.y0, self.x1, self.y1, len(self.cells) + 10, out_file, self.display, args)
+
         for cell in self.cells.values():
             self.canva.pushCell(cell)
             self.cells_mapping[cell.pos] = cell.name
@@ -297,36 +371,39 @@ class Board:
                cell1.x + cell1.width > cell2.x and\
                cell1.y < cell2.y + cell2.height and\
                cell1.y + cell1.height > cell2.y
+    
+    def removeCell(self, cell_name: str):
+        last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
+        cell = self.cells[cell_name]
+
+        # remove current cell by swap back to current and remove back
+        self.canva.swapCell(last_cell_idx, cell.pos)
+        self.canva.popCell()
+        self.cells_mapping[cell.pos] = last_cell_name
+        self.cells[last_cell_name].pos = cell.pos
+
+        del self.cells_mapping[last_cell_idx]
+        del self.cells[cell_name]
 
     # step for opt
-    def step(self, optimizeStep: OptimizeStep):
+    def normalStep(self, index: int):
+        optimizeStep = self.optimize_cases[index]
         # draw prev merge cell
-        if self.prev_merge_cell_name is not None:
-            cell = self.cells[self.prev_merge_cell_name]
-            self.canva.pushCell(cell)
-            idx = cell.pos
-            self.cells_mapping[idx] = self.prev_merge_cell_name
-            self.cells[self.prev_merge_cell_name].pos = idx
+        if index > 0:
+            prev_cell = self.cells[self.optimize_cases[index-1].added_cell.name]
+            self.canva.pushCell(prev_cell)
+            idx = prev_cell.pos
+            self.cells_mapping[idx] = prev_cell.name
+            self.cells[prev_cell.name].pos = idx
 
         # remove merged cell
         for cell_name in optimizeStep.removed_cells:
-            # get last cell
-            last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
-            current_cell = self.cells[cell_name]
-            # remove current cell by swap back to current and remove back
-            self.canva.swapCell(last_cell_idx, current_cell.pos)
-            self.canva.popCell()
-            self.cells_mapping[current_cell.pos] = last_cell_name
-            self.cells[last_cell_name].pos = current_cell.pos
-
-            del self.cells_mapping[last_cell_idx]
-            del self.cells[cell_name]
+            self.removeCell(cell_name)
 
         self.cells[optimizeStep.added_cell.name] = optimizeStep.added_cell
         self.canva.setMergeCell(optimizeStep.added_cell)
         optimizeStep.added_cell.x = optimizeStep.merge_x
         optimizeStep.added_cell.y = optimizeStep.merge_y
-        self.prev_merge_cell_name = optimizeStep.added_cell.name
 
         # move all cell
         for cell_name, (cell_x, cell_y) in optimizeStep.moved_cells:
@@ -339,7 +416,8 @@ class Board:
         return True
 
     # step for opt in detail
-    def detailStep(self, optimizeStep: OptimizeStep):
+    def detailStep(self, index: int):
+        optimizeStep = self.optimize_cases[index]
         match self.detail_status:
             case DetailStatus.REMOVE:
                 # mark remove cell
@@ -354,7 +432,6 @@ class Board:
                 # add merge cell
                 name = optimizeStep.added_cell.name
                 self.cells[name] = optimizeStep.added_cell
-                self.prev_merge_cell_name = name
                 optimizeStep.added_cell.color = ORIGINAL_MERGE_COLOR
                 # draw merge cell on oringal position
                 self.canva.pushCell(optimizeStep.added_cell)
@@ -381,17 +458,7 @@ class Board:
 
                     # remove merged cell
                     for cell_name in optimizeStep.removed_cells:
-                        # get last cell
-                        last_cell_idx, last_cell_name = self.cells_mapping.peekitem(-1)
-                        current_cell = self.cells[cell_name]
-                        # remove current cell by swap back to current and remove back
-                        self.canva.swapCell(last_cell_idx, current_cell.pos)
-                        self.canva.popCell()
-                        self.cells_mapping[current_cell.pos] = last_cell_name
-                        self.cells[last_cell_name].pos = current_cell.pos
-
-                        del self.cells_mapping[last_cell_idx]
-                        del self.cells[cell_name]
+                        self.removeCell(cell_name)
                 else:
                     self.canva.setCellColor(moved_cell)
                     self.canva.setCellPosition(moved_cell, -1.0)
@@ -439,93 +506,9 @@ class Board:
         self.canva.updateAllBuffer()
         return self.detail_status == DetailStatus.REMOVE
 
-class Visualizer:
-    def __init__(self, lg_file: str, opt_file: str, post_file: str, output_file: str, display: bool, detail: bool, args):
-        self.start_time = time.time()
-        self.board = Board(display)
-        self.board.parser(lg_file)
-
-        self.optimize_cases: list[OptimizeStep] = []
-        self.optimizeStepInit(opt_file, post_file)
-
-        self.detail = detail
-
-        self.video_out = False
-        if output_file:
-            self.video_out = True
-            self.process = (
-                ffmpeg
-                .input('pipe:0', format='rawvideo', pix_fmt='rgb24', s=f'{RESOLUTION[0]}x{RESOLUTION[1]}', framerate=args.framerate)
-                .filter('vflip') # vertical flip to convert opengl coordinate to normal coordinate
-                .output(output_file, pix_fmt=args.pix_fmt, vcodec=args.vcodec, crf=args.crf, preset=args.preset)
-                .overwrite_output() # override output if exist
-                .run_async(pipe_stdin=True) #input from stdin
-            )
-
-        self.display = display
-
-        if not self.display:
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, self.board.canva.fbo)
-
-        self.n_step = 0
-
-        # draw first frame
-        if self.display:
-            self.board.canva.display()
-        else:
-            self.board.canva.draw()
-
-    # combine post and opt data
-    def optimizeStepInit(self, opt_file, post_file):
-        with open(opt_file, "r") as file:
-            opt_lines = file.read().splitlines()
-        with open(post_file, "r") as file:
-            post_lines = file.read().splitlines()
-
-        post_line_idx = 0
-        for line in opt_lines:
-            parts = line.split(' ')
-
-            # <merge list> --> <name> <x> <y> <width> <height>
-            #    1:-6      -6    -5   -4   -3   -2       -1
-            name = parts[-5]
-            original_x, original_y, width, height = map(float, parts[-4:])
-            parts = parts[1:-6]
-
-            removed_cells = []
-            for part in parts:
-                removed_cells.append(part)
-
-            moved_cells = []
-            x, y = map(float, post_lines[post_line_idx].split(' '))
-            post_line_idx+=1
-            moved_num = int(post_lines[post_line_idx]) 
-            post_line_idx+=1
-            for i in range(moved_num):
-                parts = post_lines[post_line_idx].split(' ')
-                moved_cells.append((parts[0], tuple(map(float, parts[1:]))))
-                post_line_idx+=1
-
-            self.optimize_cases.append(OptimizeStep(removed_cells, x, y, 
-                                                    Cell(name, original_x, original_y, width, height, False, True, -1), moved_cells))
-            
-    # https://stackoverflow.com/questions/41126090/how-to-write-pyopengl-in-to-jpg-image
-    def captureFrame(self):
-        if not self.display:
-            glReadBuffer(GL_COLOR_ATTACHMENT0)
-        glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        pixels = glReadPixels(0, 0, *RESOLUTION, GL_RGB, GL_UNSIGNED_BYTE)
-        self.process.stdin.write(pixels)
-    
     # return finish or not
     def step(self):
-        if self.video_out:
-            self.captureFrame()
-
-        if self.detail:
-            finish = self.board.detailStep(self.optimize_cases[self.n_step])
-        else:
-            finish = self.board.step(self.optimize_cases[self.n_step])
+        finish = self._step(self.n_step)
         if finish:
             # move to next cases
             self.n_step += 1
@@ -533,19 +516,15 @@ class Visualizer:
                 self.terminate()
                 return True
 
-        # swap buffer only if display
-        if self.display:
-            self.board.canva.display()
-        else:   
-            self.board.canva.draw()
+        self.canva.draw()
+
         return False
 
     def terminate(self):
-        self.process.stdin.close()
-        self.process.wait() 
+        self.canva.terminate()
         print(f"visualization finish, cost: {time.time() - self.start_time} secs")
         if self.display:
-            glfw.set_window_should_close(self.board.canva.window, True)
+            glfw.set_window_should_close(self.canva.window, True) 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -579,10 +558,13 @@ if __name__ == '__main__':
         FIX_COLOR = DETAIL_FIX_COLOR
 
     display = True if args.display else False
-    visualizer = Visualizer(lg_file, opt_file, post_file, output_file, display, detail, args)
+    visualizer = Visualizer(detail, display)
+    visualizer.lgParser(lg_file)
+    visualizer.optimizeStepParser(opt_file, post_file)
+    visualizer.initCanva(output_file, args)
 
     if display:
-        while not glfw.window_should_close(visualizer.board.canva.window):
+        while not glfw.window_should_close(visualizer.canva.window):
             visualizer.step()         # Update state
             glfw.poll_events()  # Process events
     else:
