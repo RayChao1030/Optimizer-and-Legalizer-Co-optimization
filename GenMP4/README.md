@@ -14,10 +14,11 @@ A Visualizer to visualize the steps in a legalizer.
   https://github.com/user-attachments/assets/f6263b54-0a42-4c62-b433-9071680163af
 
 - **Detail Mode**  (the video is long because fps set to 2 for better visual effect)
+  - The videos are too long to update to github, so the showcases only slice first 30 mins.
 
-  https://github.com/user-attachments/assets/80490972-3fd6-4274-8ba7-91714f4016fd
+  https://github.com/user-attachments/assets/a2bba65b-32c0-496a-b5ff-903bda5e687c
 
-  https://github.com/user-attachments/assets/086032d1-09c7-4a3b-9c2c-7b5d4ee4864c
+  https://github.com/user-attachments/assets/0d003149-2b19-4fba-9b1e-bff6586424ed
 
 ## Requirements
 
@@ -77,9 +78,11 @@ $ ffmpeg -ss 30 -t 3 -i input.mp4 \
 1. **Not Fixed Cells**: grey in detail mode, green in nomal mode
 2. **Fixed Cells**: dark gray in detail mode, red in nomal mode
 3. **Merged Cells**: blue
-4. **Current Step Merged Cell**: Cyan (filled)
-5. **Cells Needing Legalization**: red, detail mode only
-6. **Cells Legalized in This Step**: green, detail mode only
+4. **Merged Cells (Coordinates Suggested by Optimizer)**: magenta
+5. **Current Step Merged Cell**: Cyan (filled)
+6. **Cells Needing Legalization**: red, detail mode only
+7. **Cells Legalized in This Step**: green, detail mode only
+8. **Cells Removed in This Step**: yellow, detail mode only
 - You can change all above color in the header part of `main.py`
 
 ## Results
