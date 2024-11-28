@@ -1,0 +1,4 @@
+Layout Optimization Animation Tool
+This tool generates an animated visualization of layout optimization steps.
+It processes .lg, .opt, and .post files as input 
+and outputs an animated .gif file showing the optimization process step-by-step about PDALab3.
